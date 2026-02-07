@@ -12,10 +12,11 @@ input:
 To execute the YOLO mode loop, run the following command in the terminal:
 
 ```bash
-python3 scripts/yolo_loop.py "$prompt"
+yolo-mode "$prompt"
 ```
 
-This script will:
+This tool will:
 1. Initialize a task list based on your prompt.
 2. Spawn autonomous agents to complete the tasks.
 3. Loop until all tasks are verified and completed.
+4. Ask for feedback or new tasks upon completion.

@@ -5,60 +5,73 @@
 ## Features
 
 *   **Autonomous Loop**: Takes a high-level prompt and runs until the job is done.
-*   **Context Hygiene**: Spawns a fresh Claude Code instance for each task, preventing context window saturation and "brain fog."
+*   **Context Hygiene**: Spawns a fresh Claude Code instance for each task, preventing context window saturation.
 *   **Planning**: Automatically generates a `YOLO_PLAN.md` (Product Requirements Document) to track progress.
-*   **Self-Correction**: Agents verify their own work and update the plan status.
-*   **Zero-Trust/YOLO**: Runs with `--dangerously-skip-permissions` to maximize autonomy (use with caution!).
+*   **TTS Feedback**: Speaks out status updates (optional).
+*   **Interactive**: Asks for feedback at the end of the mission.
+*   **Zero-Trust/YOLO**: Runs with `--dangerously-skip-permissions` to maximize autonomy.
 
 ## Installation
 
-### From Marketplace (Coming Soon)
+### 1. Global CLI Tool (Recommended)
+You can install `yolo-mode` as a global command-line tool. This allows you to run it from any directory.
+
 ```bash
-/plugin install yolo-mode
+cd /path/to/yolo-mode
+pip install -e .
 ```
 
-### Local Development
-To test or use this plugin locally:
+Now you can run:
+```bash
+yolo-mode "Your goal here" --tts
+```
 
-1.  Clone the repository:
+### 2. Claude Code Plugin (Development)
+To use it within Claude Code as a plugin:
+
+1.  Launch Claude Code pointing to this directory:
     ```bash
-    git clone https://github.com/username/yolo-mode.git
-    cd yolo-mode
+    claude --plugin-dir /path/to/yolo-mode
     ```
 
-2.  Run Claude Code with the plugin directory:
-    ```bash
-    claude --plugin-dir .
+2.  Run the slash command (Note the namespace!):
+    ```text
+    /yolo-mode:yolo "Your goal"
+    ```
+    or for TTS:
+    ```text
+    /yolo-mode:yolo-tts "Your goal"
     ```
 
 ## Usage
 
-Once the plugin is loaded, use the `/yolo` slash command followed by your objective:
+### As a CLI
+```bash
+# Basic
+yolo-mode "Refactor the login page"
 
-```text
-/yolo "Refactor the login component to use React Hooks and add unit tests"
+# With Voice Feedback
+yolo-mode "Refactor the login page" --tts
 ```
 
-### What Happens Next?
-1.  **Planning Phase**: The system creates `YOLO_PLAN.md` with a checklist of tasks.
-2.  **Execution Loop**:
-    *   The system picks the first pending task.
-    *   It launches a sub-agent to execute *just that task*.
-    *   The agent modifies code, runs tests, and updates `YOLO_PLAN.md`.
-3.  **Completion**: When all tasks are checked (`[x]`), the loop exits.
+### Inside Claude Code
+```text
+/yolo-mode:yolo "Refactor the login page"
+```
 
 ## Configuration
 
 No special configuration is required, but ensure you have:
-*   `python3` installed and available in your path.
+*   `python3` installed and available.
 *   `claude` CLI installed and authenticated.
+*   `tts-cli` installed for voice features.
 
 ## Safety Warning ⚠️
 
 This plugin uses the `--dangerously-skip-permissions` flag for its sub-agents. This means the autonomous agents can read/write files and execute terminal commands **without asking for your permission** each time.
 
 *   **Only use this in a sandboxed environment** or on a repository you have backed up.
-*   Monitor the `scripts/yolo_loop.py` output if you want to abort the process (Ctrl+C).
+*   Monitor the output if you want to abort the process (Ctrl+C).
 
 ## License
 
