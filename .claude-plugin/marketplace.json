@@ -9,7 +9,7 @@
     {
       "name": "yolo-mode",
       "description": "Autonomous agent loop plugin",
-      "source": "https://github.com/nbiish/yolo-mode"
+      "source": "https://github.com/nbiish/yolo-mode.git"
     }
   ]
 }
