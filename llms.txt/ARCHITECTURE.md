@@ -21,7 +21,7 @@ The heart of the system implementing the Plan-Execute-Verify cycle.
          ▼
 ┌─────────────────┐
 │  Plan Creator   │ ──► Creates YOLO_PLAN.md
-│  (Claude Agent) │     with task checklist
+│  (Agent)        │     with task checklist
 └────────┬────────┘
          │
          ▼
@@ -43,7 +43,7 @@ The heart of the system implementing the Plan-Execute-Verify cycle.
         ▼
 ┌─────────────────┐
 │  Task Execution │ ──► Updates YOLO_PLAN.md
-│  (Fresh Claude) │     marks task [x]
+│  (Fresh Agent)  │     marks task [x]
 └────────┬────────┘
          │
          ▼ (all done?)
@@ -128,13 +128,13 @@ yolo-mode/
 1. User provides goal via `/yolo <goal>`
 2. Claude Code reads `commands/yolo.md`
 3. Executes Python script with arguments
-4. Script spawns new Claude instance with planning prompt
+4. Script spawns new Agent instance (Claude/OpenCode/etc) with planning prompt
 5. Creates `YOLO_PLAN.md` with task checklist
 
 **Execution Phase:**
 1. Loop reads `YOLO_PLAN.md`
 2. Finds next `- [ ]` task
-3. Spawns fresh Claude instance
+3. Spawns fresh Agent instance
 4. Agent executes task
 5. Agent updates plan file to `- [x]`
 6. Repeat until all tasks complete
@@ -151,12 +151,14 @@ yolo-mode/
 ## Key Design Decisions
 
 ### Context Hygiene
-- **Fresh Processes:** Each task spawns `claude -p` with `--no-session-persistence`
+- **Fresh Processes:** Each task spawns `claude -p`, `opencode run`, etc.
 - **State Externalization:** All state in `YOLO_PLAN.md`, never in memory
 - **Isolation:** Errors in one task don't cascade to others
 
 ### Autonomy Level
-- **Permission Skipping:** `--dangerously-skip-permissions` enables true autonomy
+- **Permission Skipping:** 
+  - Claude: `--dangerously-skip-permissions`
+  - OpenCode: `OPENCODE_YOLO=true`
 - **Self-Correction:** Agents mark their own tasks complete
 - **Safety Limit:** 50 iteration max to prevent infinite loops
 

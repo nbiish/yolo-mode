@@ -32,6 +32,7 @@ claude plugin install yolo-mode@yolo-marketplace
 **Use in Claude Code:**
 ```
 /yolo "Refactor the authentication system"
+/yolo "Audit security" --agent opencode
 /yolo-tts "Build a React component library"  # With voice feedback
 ```
 
@@ -45,6 +46,7 @@ pip install -e .
 
 # Run anywhere
 yolo-mode "Your goal here" --tts
+yolo-mode "Your goal here" --agent opencode
 ```
 
 ## 📖 Usage Examples
@@ -57,8 +59,14 @@ yolo-mode "Your goal here" --tts
 
 ### As CLI
 ```bash
-# Basic usage
+# Basic usage (defaults to Claude Code)
 yolo-mode "Implement user authentication"
+
+# With OpenCode
+yolo-mode "Refactor database schema" --agent opencode
+
+# With Google Gemini
+yolo-mode "Generate documentation" --agent gemini
 
 # With voice feedback
 yolo-mode "Build a dashboard" --tts
@@ -70,7 +78,12 @@ yolo-mode "Set up a CI/CD pipeline with GitHub Actions, Docker, and AWS deployme
 ## 🔧 Requirements
 
 - **Python 3.8+**
-- **Claude Code CLI** - Install via `npm install -g @anthropic-ai/claude-code`
+- **Supported Agents:**
+  - **Claude Code** (default) - `npm install -g @anthropic-ai/claude-code`
+  - **OpenCode** - `brew install opencode`
+  - **Gemini CLI**
+  - **Qwen**
+  - **Crush**
 - **tts-cli** (optional) - For voice feedback
 
 ## ⚠️ Safety Warning

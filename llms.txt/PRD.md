@@ -8,6 +8,7 @@
 - **Purpose:** To transform Claude Code into a self-driving developer that can plan, execute, and verify complex tasks with minimal human intervention, utilizing fresh context windows for each task to maintain "context hygiene."
 - **UX:** 
     - **Dual Mode:** Works as both a **Claude Code Plugin** (via slash commands) and a **Global CLI Tool**.
+    - **Multi-Agent Support:** Supports Claude Code, OpenCode, Gemini, Qwen, and Crush.
     - **Voice Feedback:** Optional Text-to-Speech (TTS) integration via `tts-cli`.
 
 ## Core Architecture: The Ralph Loop
@@ -18,8 +19,11 @@ The system follows a specific agentic pattern:
 2.  **Executor Loop:**
     - Reads `YOLO_PLAN.md`.
     - Identifies the next pending task (`[ ]`).
-    - Spawns a **fresh** Claude Code instance (subprocess) to execute *only* that task.
-    - **Autonomous Mode:** Uses `--dangerously-skip-permissions` to bypass manual confirmation for tool use.
+    - Spawns a **fresh** agent instance (subprocess) to execute *only* that task.
+    - **Autonomous Mode:** 
+        - **Claude:** Uses `--dangerously-skip-permissions`
+        - **OpenCode:** Uses env vars `OPENCODE_YOLO=true`
+        - **Gemini/Qwen:** Uses `--yolo`
     - **Self-Correction:** The agent updates `YOLO_PLAN.md` to mark the task as done (`[x]`) upon success.
 3.  **Completion & Feedback:**
     - When all tasks are done, the loop exits.
@@ -34,7 +38,7 @@ The system follows a specific agentic pattern:
 - Automatically handles file creation, editing, and command execution.
 
 ### 2. Context Hygiene
-- Each task runs in a new process (`claude -p "..."`).
+- Each task runs in a new process (`claude -p "..."` or `opencode run "..."`).
 - Prevents the context window from filling up with previous task history.
 - Reduces hallucination and "brain fog" in long sessions.
 
@@ -59,6 +63,7 @@ The system follows a specific agentic pattern:
 ### 6. Slash Commands (v0.1.1)
 - `/yolo <goal>` - Start YOLO Mode with the specified goal
 - `/yolo-tts <goal>` - Start YOLO Mode with TTS enabled
+- **Arguments:** Supports `--agent <name>` flag (e.g., `/yolo "Build app" --agent opencode`)
 
 ## Plugin Structure
 
@@ -85,7 +90,7 @@ yolo-mode/
 
 ## Technical Stack
 - **Language:** Python 3
-- **Dependencies:** `claude` (CLI), `tts-cli` (optional)
+- **Dependencies:** `claude` (CLI) OR `opencode` (CLI), `tts-cli` (optional)
 - **Distribution:** `setuptools` (setup.py)
 - **Plugin System:** Claude Code Plugin API (v2)
 

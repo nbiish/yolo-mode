@@ -11,6 +11,8 @@
 - [x] **CLI Packaging:** Created `setup.py` and `yolo_mode` package structure for global installation (`pip install -e .`).
 - [x] **Documentation:** Updated README.md, PRD.md, RULES.md, and llms.txt files.
 - [x] **Version 0.1.1:** Fixed slash command structure using proper `commands/*.md` format.
+- [x] **Multi-Agent Support:** Added `--agent` flag to support OpenCode, Gemini, Qwen, and Crush (defaulting to Claude).
+- [x] **OpenCode Integration:** Implemented specific env-var based YOLO mode (`OPENCODE_YOLO=true`) for OpenCode.
 
 ## In Progress / Release Preparation
 
