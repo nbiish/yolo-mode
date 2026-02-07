@@ -1,8 +1,144 @@
 # YOLO Mode Plugin for Claude Code
 
+[![Version](https://img.shields.io/badge/version-0.1.1-blue)](https://github.com/nbiish/yolo-mode)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+> **Transform Claude Code into a self-driving developer**
+
+**YOLO Mode** implements the **Ralph Loop** pattern for autonomous agentic coding. It plans, executes, and verifies complex tasks with minimal human intervention while maintaining context hygiene through fresh context windows.
+
+## ✨ Features
+
+- **🤖 Autonomous Loop**: Takes a high-level prompt and runs until completion
+- **🧠 Context Hygiene**: Fresh Claude instances per task prevent context saturation
+- **📝 Smart Planning**: Auto-generates `YOLO_PLAN.md` to track progress
+- **🔊 TTS Feedback**: Optional voice announcements via `tts-cli`
+- **💬 Interactive**: Post-mission feedback loop for refinement
+- **⚡ Zero-Trust/YOLO**: Uses `--dangerously-skip-permissions` for maximum autonomy
+- **🎯 Dual Mode**: Works as Claude Code plugin OR standalone CLI
+
+## 🚀 Quick Start
+
+### Option 1: Claude Code Plugin (Recommended)
+
+```bash
+# Add the marketplace
+claude plugin marketplace add https://github.com/nbiish/yolo-mode
+
+# Install the plugin
+claude plugin install yolo-mode@yolo-marketplace
+```
+
+**Use in Claude Code:**
+```
+/yolo "Refactor the authentication system"
+/yolo-tts "Build a React component library"  # With voice feedback
+```
+
+### Option 2: Global CLI Tool
+
+```bash
+# Install from source
+git clone https://github.com/nbiish/yolo-mode.git
+cd yolo-mode
+pip install -e .
+
+# Run anywhere
+yolo-mode "Your goal here" --tts
+```
+
+## 📖 Usage Examples
+
+### As Plugin (Inside Claude Code)
+```
+/yolo "Create a REST API with FastAPI"
+/yolo-tts "Write unit tests for the utils module"
+```
+
+### As CLI
+```bash
+# Basic usage
+yolo-mode "Implement user authentication"
+
+# With voice feedback
+yolo-mode "Build a dashboard" --tts
+
+# Complex multi-step goal
+yolo-mode "Set up a CI/CD pipeline with GitHub Actions, Docker, and AWS deployment"
+```
+
+## 🔧 Requirements
+
+- **Python 3.8+**
+- **Claude Code CLI** - Install via `npm install -g @anthropic-ai/claude-code`
+- **tts-cli** (optional) - For voice feedback
+
+## ⚠️ Safety Warning
+
+This plugin uses `--dangerously-skip-permissions` for sub-agents, enabling **autonomous file and command execution**.
+
+**Recommendations:**
+- ✅ Use in version-controlled repositories
+- ✅ Review `YOLO_PLAN.md` before execution
+- ✅ Run in sandboxed/development environments
+- ✅ Monitor output (Ctrl+C to abort)
+- ❌ Never use on production systems without review
+
+## 🏗️ How It Works
+
+```
+User Goal
+    ↓
+[Planner] Creates YOLO_PLAN.md with task checklist
+    ↓
+[Executor Loop] While tasks remain:
+    - Reads next pending task
+    - Spawns fresh Claude instance
+    - Executes task autonomously
+    - Updates plan file
+    ↓
+[Feedback] Ask user for additional tasks
+```
+
+## 📁 Project Structure
+
+```
+yolo-mode/
+├── .claude-plugin/      # Plugin metadata
+├── commands/            # Slash command definitions
+│   ├── yolo.md
+│   └── yolo-tts.md
+├── yolo_mode/          # Python package
+│   └── scripts/
+│       └── yolo_loop.py
+├── llms.txt/           # AI documentation
+└── setup.py            # CLI packaging
+```
+
+## 📚 Documentation
+
+- **[PRD](llms.txt/PRD.md)** - Product Requirements Document
+- **[ARCHITECTURE](llms.txt/ARCHITECTURE.md)** - System design and data flow
+- **[RULES](llms.txt/RULES.md)** - Development standards
+- **[TODO](llms.txt/TODO.md)** - Roadmap and status
+
+## 🔄 Version History
+
+- **v0.1.1** - Fixed slash commands, proper `commands/*.md` structure
+- **v0.1.0** - Initial release with Ralph Loop pattern
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) file.
+
+## 🙏 Support
+
 <div align="center">
   <hr width="50%">
-  <h3>Support This Project</h3>
   <table style="border: none; border-collapse: collapse;">
     <tr style="border: none;">
       <td align="center" style="border: none; vertical-align: middle; padding: 20px;">
@@ -19,79 +155,6 @@
   </table>
   <hr width="50%">
 </div>
-
-**YOLO Mode** is a Claude Code plugin that implements the **Ralph Loop** pattern for autonomous agentic coding. It transforms Claude Code into a self-driving developer that can plan, execute, and verify complex tasks with minimal human intervention.
-
-## Features
-
-*   **Autonomous Loop**: Takes a high-level prompt and runs until the job is done.
-*   **Context Hygiene**: Spawns a fresh Claude Code instance for each task, preventing context window saturation.
-*   **Planning**: Automatically generates a `YOLO_PLAN.md` (Product Requirements Document) to track progress.
-*   **TTS Feedback**: Speaks out status updates (optional).
-*   **Interactive**: Asks for feedback at the end of the mission.
-*   **Zero-Trust/YOLO**: Runs with `--dangerously-skip-permissions` to maximize autonomy.
-
-## Installation
-
-### 1. Global CLI Tool (Recommended)
-You can install `yolo-mode` as a global command-line tool. This allows you to run it from any directory.
-
-```bash
-cd /path/to/yolo-mode
-pip install -e .
-```
-
-Now you can run:
-```bash
-yolo-mode "Your goal here" --tts
-```
-
-### 2. Claude Code Plugin (Development)
-To use it within Claude Code as a plugin:
-
-1.  Launch Claude Code pointing to this directory:
-    ```bash
-    claude --plugin-dir /path/to/yolo-mode
-    ```
-
-2.  Run the slash command (Note the namespace!):
-    ```text
-    /yolo-mode:yolo "Your goal"
-    ```
-    or for TTS:
-    ```text
-    /yolo-mode:yolo-tts "Your goal"
-    ```
-
-## Usage
-
-### As a CLI
-```bash
-# Basic
-yolo-mode "Refactor the login page"
-
-# With Voice Feedback
-yolo-mode "Refactor the login page" --tts
-```
-
-### Inside Claude Code
-```text
-/yolo-mode:yolo "Refactor the login page"
-```
-
-## Configuration
-
-No special configuration is required, but ensure you have:
-*   `python3` installed and available.
-*   `claude` CLI installed and authenticated.
-*   `tts-cli` installed for voice features.
-
-## Safety Warning ⚠️
-
-This plugin uses the `--dangerously-skip-permissions` flag for its sub-agents. This means the autonomous agents can read/write files and execute terminal commands **without asking for your permission** each time.
-
-*   **Only use this in a sandboxed environment** or on a repository you have backed up.
-*   Monitor the output if you want to abort the process (Ctrl+C).
 
 ## Citation
 
