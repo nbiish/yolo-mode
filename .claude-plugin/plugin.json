@@ -10,8 +10,12 @@
   "license": "MIT",
   "repository": "https://github.com/nbiish/yolo-mode",
   "homepage": "https://github.com/nbiish/yolo-mode#readme",
-  "commands": [
-    "commands/yolo",
-    "commands/yolo-tts"
-  ]
+  "commands": {
+    "yolo": {
+      "path": "commands/yolo"
+    },
+    "yolo-tts": {
+      "path": "commands/yolo-tts"
+    }
+  }
 }
