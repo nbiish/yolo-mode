@@ -1,0 +1,15 @@
+{
+  "name": "yolo-marketplace",
+  "description": "Marketplace for YOLO Mode",
+  "owner": {
+    "name": "Nbiish",
+    "url": "https://github.com/nbiish"
+  },
+  "plugins": [
+    {
+      "name": "yolo-mode",
+      "description": "Autonomous agent loop plugin",
+      "source": "https://github.com/nbiish/yolo-mode"
+    }
+  ]
+}
