@@ -1,6 +1,6 @@
 {
   "name": "yolo-mode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An autonomous agent loop plugin for Claude Code that implements the Ralph Loop pattern. It takes a prompt, plans tasks, and iteratively executes them using fresh contexts until completion.",
   "author": {
     "name": "ᓂᐲᔥ ᐙᐸᓂᒥᑮ-ᑭᓇᐙᐸᑭᓯ (Nbiish Waabanimikii-Kinawaabakizi)",
@@ -9,5 +9,9 @@
   },
   "license": "MIT",
   "repository": "https://github.com/nbiish/yolo-mode",
-  "homepage": "https://github.com/nbiish/yolo-mode#readme"
+  "homepage": "https://github.com/nbiish/yolo-mode#readme",
+  "commands": [
+    "commands/yolo",
+    "commands/yolo-tts"
+  ]
 }
