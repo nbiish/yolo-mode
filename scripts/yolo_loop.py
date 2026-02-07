@@ -6,6 +6,14 @@ import sys
 import re
 import time
 
+def speak(text, enabled=False):
+    """Speaks the text using tts-cli if enabled."""
+    if enabled:
+        try:
+            subprocess.Popen(["tts-cli", "--text", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"Warning: Failed to run tts-cli: {e}")
+
 def run_claude(prompt, verbose=False):
     """Runs Claude in non-interactive mode with permissions skipped."""
     cmd = [
@@ -33,10 +41,15 @@ def run_claude(prompt, verbose=False):
 def main():
     parser = argparse.ArgumentParser(description="YOLO Mode Loop")
     parser.add_argument("prompt", help="The main goal/prompt")
+    parser.add_argument("--tts", action="store_true", help="Enable TTS output via tts-cli")
     args = parser.parse_args()
 
     goal = args.prompt
+    use_tts = args.tts
+    
     print(f"🚀 Starting YOLO Mode for goal: {goal}")
+    if use_tts:
+        speak(f"Starting YOLO Mode for goal: {goal}", True)
 
     # Ensure we are in the right directory (cwd)
     # The script is likely run from the project root.
@@ -46,6 +59,9 @@ def main():
     # Step 1: Initialize Plan
     if not os.path.exists(plan_file):
         print("📋 Initializing plan...")
+        if use_tts:
+            speak("Initializing plan", True)
+            
         init_prompt = f"""
         Goal: {goal}
         
@@ -63,6 +79,8 @@ def main():
         run_claude(init_prompt, verbose=True)
     else:
         print(f"📋 Found existing {plan_file}, resuming...")
+        if use_tts:
+            speak("Resuming from existing plan", True)
 
     # Step 2: Loop
     iteration = 0
@@ -74,6 +92,8 @@ def main():
         
         if not os.path.exists(plan_file):
             print(f"❌ {plan_file} missing. Aborting.")
+            if use_tts:
+                speak("Plan file missing. Aborting.", True)
             break
             
         with open(plan_file, "r") as f:
@@ -86,10 +106,14 @@ def main():
         
         if not match:
             print("✅ No more pending tasks found. Mission Complete!")
+            if use_tts:
+                speak("Mission Complete!", True)
             break
             
         current_task = match.group(1).strip()
         print(f"🔨 Executing Task: {current_task}")
+        if use_tts:
+            speak(f"Executing Task: {current_task}", True)
         
         # Construct Prompt for the worker
         # We instruct it to update the plan status itself after completion
@@ -121,10 +145,8 @@ def main():
             
         if plan_content == new_content:
             print("⚠️ Warning: Plan was not updated. The agent might have failed or forgotten to mark it complete.")
-            # We could retry or force mark it, but let's leave it for now to avoid infinite loops on same task if it fails.
-            # To be safe, if it fails to update X times, we should stop.
-            # For this MVP, we'll continue. The loop might repeat the task. 
-            # Ideally, we should add a 'retry' logic or force skip.
+            if use_tts:
+                speak("Warning: Task completion not detected.", True)
             
             # Simple retry prevention:
             print("Force marking task as skipped/failed to prevent infinite loop (MVP fallback).")
@@ -137,6 +159,8 @@ def main():
 
     if iteration >= max_iterations:
         print("🛑 Max iterations reached. Stopping.")
+        if use_tts:
+            speak("Max iterations reached. Stopping.", True)
 
 if __name__ == "__main__":
     main()
