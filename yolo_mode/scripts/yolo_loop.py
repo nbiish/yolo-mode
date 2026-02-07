@@ -22,34 +22,60 @@ def speak(text, enabled=False):
             # Silently fail or log to stderr if absolutely needed, but keep main output clean
             pass
 
-def run_claude(prompt, verbose=False):
-    """Runs Claude in non-interactive mode with permissions skipped."""
+def run_agent(agent, prompt, verbose=False):
+    """Runs the specified agent in autonomous mode."""
     
-    # We explicitly mention tts-cli availability in the system prompt context we inject
-    # via the prompt wrapper, ensuring the agent knows it can use it if it decides to spawn sub-agents or scripts.
-    # However, for this loop, we control the TTS.
+    cmd = []
     
-    cmd = [
-        "claude",
-        "-p", prompt,
-        "--dangerously-skip-permissions",
-        "--no-session-persistence"
-    ]
+    if agent == "claude":
+        cmd = [
+            "claude",
+            "-p", prompt,
+            "--dangerously-skip-permissions",
+            "--no-session-persistence"
+        ]
+    elif agent == "opencode":
+        # Opencode requires environment variable for YOLO mode in some versions
+        # CLI flags like --yolo or --dangerously-skip-permissions are not always available
+        cmd = ["opencode", "run", prompt]
+        env_vars = os.environ.copy()
+        env_vars["OPENCODE_YOLO"] = "true"
+        env_vars["OPENCODE_DANGEROUSLY_SKIP_PERMISSIONS"] = "true"
+    elif agent == "gemini":
+        cmd = ["gemini", "--yolo", prompt]
+    elif agent == "qwen":
+        cmd = ["qwen", "--yolo", prompt]
+    elif agent == "crush":
+        cmd = ["crush", "run", prompt]
+    else:
+        # Fallback for generic tools that might support the prompt as last arg
+        # or we could error out. For now, assume a simple pass-through if unknown,
+        # but better to warn.
+        print(f"⚠️ Unknown agent '{agent}', defaulting to claude-style invocation")
+        cmd = [agent, prompt]
+
     if verbose:
-        print(f"[{time.strftime('%H:%M:%S')}] Running Claude task...")
+        print(f"[{time.strftime('%H:%M:%S')}] Running {agent} task...")
     
     # We run capturing output to avoid cluttering the main terminal too much,
     # but we print it if verbose.
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    
-    if result.returncode != 0:
-        print(f"Error running Claude: {result.stderr}")
-        return None
-    
-    if verbose:
-        print(f"Output: {result.stdout.strip()}")
+    try:
+        # Pass env_vars if they exist, otherwise default to os.environ
+        run_env = locals().get('env_vars', None)
         
-    return result.stdout
+        result = subprocess.run(cmd, capture_output=True, text=True, env=run_env)
+        
+        if result.returncode != 0:
+            print(f"Error running {agent}: {result.stderr}")
+            return None
+        
+        if verbose:
+            print(f"Output: {result.stdout.strip()}")
+            
+        return result.stdout
+    except FileNotFoundError:
+        print(f"❌ Agent '{agent}' not found in PATH.")
+        return None
 
 def clean_text_for_tts(text):
     """Removes markdown and other noise for clearer speech."""
@@ -57,18 +83,20 @@ def clean_text_for_tts(text):
 
 def main():
     parser = argparse.ArgumentParser(description="YOLO Mode Loop")
-    parser.add_argument("prompt", help="The main goal/prompt")
+    parser.add_argument("prompt", nargs="+", help="The main goal/prompt")
     parser.add_argument("--tts", action="store_true", help="Enable TTS output via tts-cli")
+    parser.add_argument("--agent", default="claude", help="The CLI agent to use (claude, opencode, gemini, etc.)")
     args = parser.parse_args()
 
-    goal = args.prompt
+    goal = " ".join(args.prompt)
     use_tts = args.tts
+    agent = args.agent
     plan_file = "YOLO_PLAN.md"
     
-    print(f"🚀 Starting YOLO Mode for goal: {goal}")
+    print(f"🚀 Starting YOLO Mode with {agent} for goal: {goal}")
     if use_tts:
         clean_goal = clean_text_for_tts(goal)
-        speak(f"Starting YOLO Mode for: {clean_goal}", True)
+        speak(f"Starting YOLO Mode with {agent} for: {clean_goal}", True)
         time.sleep(1) # Extra pause after start
 
     # Ensure we are in the right directory (cwd)
@@ -84,7 +112,7 @@ def main():
             init_prompt = f"""
             Goal: {goal}
             
-            You are an autonomous planner.
+            You are an autonomous planner using {agent}.
             Create a detailed plan to achieve this goal. 
             Write the plan to a file named '{plan_file}'.
             
@@ -93,9 +121,9 @@ def main():
             - [ ] Another task
             
             Do not include any completed tasks yet. Just the initial plan.
-            Use the 'Bash' or 'Write' tool to create the file.
+            Use the available tools (Bash, Write, etc.) to create the file.
             """
-            run_claude(init_prompt, verbose=True)
+            run_agent(agent, init_prompt, verbose=True)
         else:
             print(f"📋 Found existing {plan_file}, resuming...")
             if use_tts:
@@ -138,7 +166,7 @@ def main():
             # Construct Prompt for the worker
             # We instruct it to update the plan status itself after completion
             worker_prompt = f"""
-            You are an autonomous worker in a loop.
+            You are an autonomous worker in a loop using {agent}.
             
             Goal: {goal}
             
@@ -157,7 +185,7 @@ def main():
             - Update the plan file yourself.
             """
             
-            output = run_claude(worker_prompt, verbose=True)
+            output = run_agent(agent, worker_prompt, verbose=True)
             
             if output is None:
                  if use_tts:
@@ -216,7 +244,7 @@ def main():
         Append them as new checklist items "- [ ] Task".
         Do NOT remove completed tasks.
         """
-        run_claude(update_prompt, verbose=True)
+        run_agent(agent, update_prompt, verbose=True)
         # Loop continues...
 
 if __name__ == "__main__":

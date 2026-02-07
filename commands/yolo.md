@@ -6,4 +6,4 @@ argument-hint: <goal/prompt>
 Start YOLO Mode with the goal: $ARGUMENTS
 
 Run the YOLO Mode autonomous loop:
-!`python3 yolo_mode/scripts/yolo_loop.py "$ARGUMENTS"`
+!`python3 yolo_mode/scripts/yolo_loop.py $ARGUMENTS`
