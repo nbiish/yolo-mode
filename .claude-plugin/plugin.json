@@ -11,13 +11,7 @@
   "repository": "https://github.com/nbiish/yolo-mode",
   "homepage": "https://github.com/nbiish/yolo-mode#readme",
   "commands": [
-    {
-      "name": "yolo",
-      "path": "commands/yolo"
-    },
-    {
-      "name": "yolo-tts",
-      "path": "commands/yolo-tts"
-    }
+    "commands/yolo",
+    "commands/yolo-tts"
   ]
 }
