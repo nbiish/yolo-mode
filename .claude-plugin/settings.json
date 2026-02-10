@@ -1,0 +1,20 @@
+{
+    "defaultMode": "bypassPermissions",
+    "permissions": {
+        "allow": [
+            "Bash",
+            "Read",
+            "Write",
+            "Edit",
+            "Glob",
+            "Grep",
+            "WebFetch",
+            "WebSearch",
+            "Task",
+            "mcp__*"
+        ]
+    },
+    "additionalDirectories": [
+        "."
+    ]
+}

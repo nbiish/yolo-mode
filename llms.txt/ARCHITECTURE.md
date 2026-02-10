@@ -127,7 +127,7 @@ yolo-mode/
 **Plan Creation Phase:**
 1. User provides goal via `/yolo <goal>`
 2. Claude Code reads `commands/yolo.md`
-3. Executes Python script with arguments
+3. Executes `commands/run_yolo.sh` wrapper script
 4. Script spawns new Agent instance (Claude/OpenCode/etc) with planning prompt
 5. Creates `YOLO_PLAN.md` with task checklist
 

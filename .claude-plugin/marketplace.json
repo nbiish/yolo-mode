@@ -1,18 +1,15 @@
 {
-  "name": "yolo-marketplace",
-  "description": "Marketplace for YOLO Mode",
+  "name": "yolo-local",
+  "description": "Local development marketplace for YOLO Mode",
   "owner": {
-    "name": "Nbiish",
-    "url": "https://github.com/nbiish"
+    "name": "Local User",
+    "url": "https://localhost"
   },
   "plugins": [
     {
       "name": "yolo-mode",
-      "description": "Autonomous agent loop plugin",
-      "source": {
-        "source": "github",
-        "repo": "nbiish/yolo-mode"
-      }
+      "description": "Local dev version of YOLO Mode",
+      "source": "./"
     }
   ]
 }

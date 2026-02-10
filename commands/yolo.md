@@ -1,9 +1,17 @@
 ---
-description: Start YOLO Mode - an autonomous agent loop that takes a prompt, plans tasks, and iteratively executes them
-argument-hint: <goal/prompt>
+description: "Start YOLO Mode - autonomous agent loop"
+argument-hint: "<goal/prompt>"
+allowed-tools: ["Bash(${CLAUDE_PLUGIN_ROOT}/scripts/init_yolo.sh:*)"]
+hide-from-slash-command-tool: "true"
 ---
 
-Start YOLO Mode with the goal: $ARGUMENTS
+# YOLO Mode
 
-Run the YOLO Mode autonomous loop:
-!`python3 yolo_mode/scripts/yolo_loop.py $ARGUMENTS`
+Initialize autonomous YOLO mode.
+
+```!
+"${CLAUDE_PLUGIN_ROOT}/scripts/init_yolo.sh" "$ARGUMENTS"
+```
+
+The Ralph Loop hook will take over and autonomously execute tasks from `YOLO_PLAN.md`.
+
