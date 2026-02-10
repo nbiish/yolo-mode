@@ -9,6 +9,43 @@ set -euo pipefail
 STATE_FILE=".claude/yolo-state.md"
 PLAN_FILE="YOLO_PLAN.md"
 
+# Auto-detect if this is the first YOLO command invocation
+# If the command contains "YOLO Mode" and state doesn't exist, initialize it
+HOOK_INPUT=$(cat /dev/stdin)
+COMMAND_TEXT=$(echo "$HOOK_INPUT" | jq -r '.command // empty' 2>/dev/null || echo "")
+
+# Check if this is a YOLO command invocation
+if [[ ! -f "$STATE_FILE" ]] && [[ "$COMMAND_TEXT" == *"YOLO Mode"* ]]; then
+  # Initialize YOLO state on first command invocation
+  mkdir -p .claude
+
+  # Determine if this is forever mode based on command
+  MAX_ITERATIONS=50
+  if [[ "$COMMAND_TEXT" == *"Forever"* ]] || [[ "$COMMAND_TEXT" == *"forever"* ]]; then
+    MAX_ITERATIONS=1000
+  fi
+
+  # Extract goal from the command (remove YOLO Mode prefix)
+  GOAL=$(echo "$COMMAND_TEXT" | sed 's/.*YOLO Mode.*for goal: //; s/.*YOLO Mode.*with goal: //; s/.*Initialize autonomous.*: //')
+
+  # Copy OSA Framework
+  cp "${CLAUDE_PLUGIN_ROOT}/yolo_mode/OSA.md" ".claude/OSA_FRAMEWORK.md" 2>/dev/null || true
+
+  # Initialize state file
+  cat > "$STATE_FILE" <<EOF
+---
+status: running
+iteration: 0
+max_iterations: $MAX_ITERATIONS
+goal: "$GOAL"
+---
+EOF
+
+  echo "🚀 YOLO Mode Initialized."
+  echo "Goal: $GOAL"
+  echo "Max Iterations: $MAX_ITERATIONS"
+fi
+
 if [[ ! -f "$STATE_FILE" ]]; then
   exit 0 # Not in YOLO mode, allow exit
 fi
@@ -37,8 +74,7 @@ if [[ "$ITERATION" -ge "$MAX_ITERATIONS" ]]; then
 fi
 
 # --- RALPH LOOP ROBUSTNESS CHECKS ---
-# Read hook input (transcript path)
-HOOK_INPUT=$(cat /dev/stdin)
+# Extract transcript path from hook input (already read above)
 TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path')
 
 if [[ ! -f "$TRANSCRIPT_PATH" ]]; then
