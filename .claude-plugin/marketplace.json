@@ -1,14 +1,14 @@
 {
-  "name": "yolo-local",
-  "description": "Local development marketplace for YOLO Mode",
+  "name": "yolo-marketplace",
+  "description": "Official marketplace for YOLO Mode plugins",
   "owner": {
-    "name": "Local User",
-    "url": "https://localhost"
+    "name": "nbiish",
+    "url": "https://github.com/nbiish"
   },
   "plugins": [
     {
       "name": "yolo-mode",
-      "description": "Local dev version of YOLO Mode",
+      "description": "Autonomous agent loop plugin for Claude Code (Ralph Loop pattern)",
       "source": "./"
     }
   ]
