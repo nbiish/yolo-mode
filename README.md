@@ -1,6 +1,6 @@
 # YOLO Mode Plugin for Claude Code
 
-[![Version](https://img.shields.io/badge/version-0.1.7-blue)](https://github.com/nbiish/yolo-mode)
+[![Version](https://img.shields.io/badge/version-0.1.9-blue)](https://github.com/nbiish/yolo-mode)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > **Transform Claude Code into a self-driving developer**

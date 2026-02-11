@@ -7,24 +7,46 @@ set -euo pipefail
 # State file location
 STATE_FILE=".claude/yolo-state.md"
 PLAN_FILE="YOLO_PLAN.md"
+USER_FEEDBACK_FILE=".claude/yolo_feedback.md"
 
 # Ensure .claude directory exists
 mkdir -p .claude
+
+# Clear stale feedback
+if [[ -f "$USER_FEEDBACK_FILE" ]]; then
+    rm "$USER_FEEDBACK_FILE"
+fi
 
 # Determine Plugin Root (where this script lives -> parent -> parent)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Goal argument (all arguments passed to script)
-GOAL="${*:-}"
+# Parse arguments
+GOAL=""
+TTS_ENABLED="false"
 MAX_ITERATIONS=50
 
-# Check for --forever flag in the arguments
-if [[ "$GOAL" == *"--forever"* ]]; then
-    MAX_ITERATIONS=1000
-    GOAL=${GOAL//--forever/} # Remove flag from goal
-    echo "♾️  Forever Mode Enabled (Max Iterations: $MAX_ITERATIONS)"
-fi
+# Loop through arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --tts)
+      TTS_ENABLED="true"
+      shift # past argument
+      ;;
+    --forever)
+      MAX_ITERATIONS=1000
+      shift # past argument
+      ;;
+    *)
+      if [[ -z "$GOAL" ]]; then
+        GOAL="$1"
+      else
+        GOAL="$GOAL $1"
+      fi
+      shift # past argument
+      ;;
+  esac
+done
 
 # Copy OSA Framework to local .claude directory for reference
 mkdir -p ".claude"
@@ -37,17 +59,24 @@ cat > "$STATE_FILE" <<EOF
 status: running
 iteration: 0
 max_iterations: $MAX_ITERATIONS
+tts: $TTS_ENABLED
 goal: "$GOAL"
 ---
 EOF
 
 echo "🚀 YOLO Mode Initialized."
 echo "Goal: $GOAL"
+if [[ "$TTS_ENABLED" == "true" ]]; then
+    echo "🔊 TTS Enabled"
+    # Announce start if TTS is enabled
+    if command -v tts-cli &> /dev/null; then
+        tts-cli --text "YOLO Mode Initialized. Goal: $GOAL" >/dev/null 2>&1 || true
+    fi
+fi
 echo "State File: $STATE_FILE"
 echo "⚠️  TIP: For TRUE zero-interaction, allow all tools or run: claude --dangerously-skip-permissions"
 
 # Check if PLAN_FILE exists
-# Check if PLAN_FILE exists, if not create it with OSA Guidance
 if [ ! -f "$PLAN_FILE" ]; then
     cat > "$PLAN_FILE" <<EOF
 # YOLO Plan

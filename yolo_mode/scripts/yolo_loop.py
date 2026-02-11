@@ -7,6 +7,8 @@ Implements the OSA (Orchestrated System of Agents) Framework with:
 - Specialized prompts per persona
 - Intelligent task-to-role detection
 - Parallel task execution with dependency detection
+- Contract-aware agent selection (NEW)
+- Resource budget enforcement (NEW)
 """
 import argparse
 import subprocess
@@ -18,6 +20,25 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Tuple, Set
 from dataclasses import dataclass, field
+
+# Import new agents module
+try:
+    # Add parent directory to path for imports
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from yolo_mode.agents import (
+        AGENT_REGISTRY,
+        detect_role_and_agent,
+        run_agent,
+        OSARole,
+        ResourceAwareSelector,
+        build_contract_aware_prompt,
+    )
+    from yolo_mode.contracts import AgentContract, ContractMode, ContractFactory, ResourceDimension
+    NEW_AGENTS_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Warning: New agents module not available: {e}")
+    print("   Falling back to legacy agent handling...")
+    NEW_AGENTS_AVAILABLE = False
 
 
 # ============================================================================
@@ -281,7 +302,7 @@ class ParallelExecutor:
         role_agent = get_agent_for_role(detected_role, default_agent)
 
         print(f"   🧵 [Thread-{threading.current_thread().name}] {task.description[:50]}...")
-        print(f"      🎭 Role: {detected_role.upper()} | 🤖 Agent: {role_agent}")
+        print(f"      🎭 Role: {detected_role.value.upper()} | 🤖 Agent: {role_agent}")
 
         worker_prompt = build_role_based_prompt(
             role=detected_role,
@@ -595,15 +616,29 @@ def main():
     parser = argparse.ArgumentParser(description="YOLO Mode Loop")
     parser.add_argument("prompt", nargs="+", help="The main goal/prompt")
     parser.add_argument("--tts", action="store_true", help="Enable TTS output via tts-cli")
-    parser.add_argument("--agent", default="claude", help="The CLI agent to use (claude, opencode, gemini, etc.)")
+    parser.add_argument("--agent", default="claude", help="The CLI agent to use (claude, opencode, gemini, qwen, crush, etc.)")
+    parser.add_argument("--contract-mode", choices=["urgent", "economical", "balanced"], default="balanced",
+                        help="Contract mode for resource management (default: balanced)")
     args = parser.parse_args()
 
     goal = " ".join(args.prompt)
     use_tts = args.tts
     agent = args.agent
+    contract_mode_str = args.contract_mode
     plan_file = "YOLO_PLAN.md"
-    
-    print(f"🚀 Starting YOLO Mode with {agent} for goal: {goal}")
+
+    # Create contract if new agents available
+    contract = None
+    resource_selector = None
+    if NEW_AGENTS_AVAILABLE:
+        # Use lowercase string value for ContractMode (enum values are lowercase)
+        contract_mode = ContractMode(contract_mode_str.lower())
+        contract = ContractFactory.default(mode=contract_mode)
+        contract.activate()
+        resource_selector = ResourceAwareSelector(contract)
+        print(f"🚀 Starting YOLO Mode | Contract: {contract_mode_str.upper()} | Default Agent: {agent}")
+    else:
+        print(f"🚀 Starting YOLO Mode with {agent} for goal: {goal}")
     if use_tts:
         clean_goal = clean_text_for_tts(goal)
         speak(f"Starting YOLO Mode with {agent} for: {clean_goal}", True)
@@ -672,32 +707,89 @@ def main():
             # ============================================================================
             # ROLE-BASED TASK ROUTING (OSA Framework)
             # ============================================================================
-            # Detect the appropriate role for this task based on keywords
-            detected_role = detect_role(current_task)
 
-            # Get the best agent for this role (may differ from default agent)
-            role_agent = get_agent_for_role(detected_role, agent)
+            # Check contract status if available
+            if contract:
+                can_proceed, reason = contract.can_proceed()
+                if not can_proceed:
+                    print(f"🛑 Contract violation: {reason}")
+                    if use_tts:
+                        speak(f"Contract violation: {reason}", True)
+                    break
 
-            print(f"🔨 Executing Task: {current_task}")
-            print(f"   🎭 Detected Role: {detected_role.upper()}")
-            if role_agent != agent:
-                print(f"   🤖 Agent Selection: {role_agent} (role-preferred)")
+            # Detect appropriate role for this task based on keywords
+            if NEW_AGENTS_AVAILABLE:
+                detected_role, role_agent = detect_role_and_agent(current_task, [agent])
+                reasoning = f"Role: {detected_role.value}"
+
+                # Apply resource-aware selection if contract is active
+                if resource_selector and contract:
+                    role_agent, selector_reasoning = resource_selector.select_agent(current_task, [agent], detected_role)
+                    reasoning = selector_reasoning
+
+                print(f"🔨 Executing Task: {current_task}")
+                print(f"   🎭 Detected Role: {detected_role.value.upper()}")
+                if role_agent != agent:
+                    print(f"   🤖 Agent: {role_agent}")
+                print(f"   📊 {reasoning}")
+
+                # Build contract-aware prompt
+                base_prompt = build_role_based_prompt(
+                    role=detected_role,
+                    task=current_task,
+                    goal=goal,
+                    plan_content=plan_content,
+                    plan_file=plan_file
+                )
+                worker_prompt = build_contract_aware_prompt(base_prompt, role_agent, contract)
+            else:
+                # Legacy behavior
+                detected_role = detect_role(current_task)
+                role_agent = get_agent_for_role(detected_role, agent)
+
+                print(f"🔨 Executing Task: {current_task}")
+                print(f"   🎭 Detected Role: {detected_role.value.upper()}")
+                if role_agent != agent:
+                    print(f"   🤖 Agent Selection: {role_agent} (role-preferred)")
+
+                worker_prompt = build_role_based_prompt(
+                    role=detected_role,
+                    task=current_task,
+                    goal=goal,
+                    plan_content=plan_content,
+                    plan_file=plan_file
+                )
 
             if use_tts:
                 clean_task = clean_text_for_tts(current_task)
                 speak(f"Executing: {clean_task}", True)
 
-            # Build specialized prompt based on detected role
-            worker_prompt = build_role_based_prompt(
-                role=detected_role,
-                task=current_task,
-                goal=goal,
-                plan_content=plan_content,
-                plan_file=plan_file
-            )
+            # Check contract status before execution
+            if contract:
+                can_proceed, reason = contract.can_proceed()
+                if not can_proceed:
+                    print(f"🛑 Contract constraint: {reason}")
+                    if use_tts:
+                        speak(f"Contract constraint reached: {reason}", True)
+                    break
 
             # Execute with the role-appropriate agent
             output = run_agent(role_agent, worker_prompt, verbose=True)
+
+            # Track resource consumption after execution
+            if contract and output:
+                # Estimate token consumption based on output length
+                estimated_tokens = len(str(output)) // 4  # Rough estimate
+                contract.consume_resource(ResourceDimension.TOKENS, estimated_tokens)
+                contract.consume_resource(ResourceDimension.ITERATIONS, 1)
+
+                # Print contract status
+                status = contract.get_status()
+                max_util = status["max_utilization"]
+                if max_util > 0.8:
+                    print(f"   📊 High utilization: {max_util*100:.0f}%")
+                    if use_tts:
+                        speak(f"Resource usage at {max_util*100:.0f} percent", True)
             
             if output is None:
                  if use_tts:
@@ -727,6 +819,20 @@ def main():
         
         # Interactive Feedback Loop
         print("\n--- Mission Complete ---")
+
+        # Print final contract status
+        if contract:
+            status = contract.get_status()
+            print(f"\n📊 Contract Status Report:")
+            print(f"   State: {status['state'].upper()}")
+            print(f"   Max Utilization: {status['max_utilization']*100:.1f}%")
+            print(f"   Time Remaining: {status['time_remaining']:.0f}s")
+            for resource, consumed in status['consumption'].items():
+                budget = status['budgets'].get(resource, float('inf'))
+                if budget != float('inf'):
+                    util = status['utilization'].get(resource, 0)
+                    print(f"   {resource.upper()}: {consumed:.0f}/{budget:.0f} ({util*100:.1f}%)")
+
         if use_tts:
              speak("Do you have any feedback or additional tasks?", True)
              
