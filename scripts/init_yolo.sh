@@ -74,7 +74,7 @@ if [[ "$TTS_ENABLED" == "true" ]]; then
     fi
 fi
 echo "State File: $STATE_FILE"
-echo "⚠️  TIP: For TRUE zero-interaction, allow all tools or run: claude --dangerously-skip-permissions"
+echo "⚠️  TIP: YOLO Mode works best with all tools allowed. Run with: claude --dangerously-skip-permissions"
 
 # Check if PLAN_FILE exists
 if [ ! -f "$PLAN_FILE" ]; then
