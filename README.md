@@ -1,6 +1,6 @@
 # YOLO Mode Plugin for Claude Code
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue)](https://github.com/nbiish/yolo-mode)
+[![Version](https://img.shields.io/badge/version-0.1.7-blue)](https://github.com/nbiish/yolo-mode)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > **Transform Claude Code into a self-driving developer**
@@ -86,15 +86,20 @@ yolo-mode "Set up a CI/CD pipeline with GitHub Actions, Docker, and AWS deployme
   - **Crush**
 - **tts-cli** (optional) - For voice feedback
 
-## ⚠️ Safety Warning
+## ⚠️ Anti-Stall & Zero Interaction
 
-This plugin uses `--dangerously-skip-permissions` for sub-agents, enabling **autonomous file and command execution**.
+To achieve **true autonomous operation** without permission prompts for every tool use, you MUST start Claude Code with the following flag:
+
+```bash
+claude --dangerously-skip-permissions
+```
+
+If you do not use this flag, the "YOLO Mode" loop will pause and wait for your approval whenever the agent tries to use a tool (Bash, File Edit, etc.), defeating the purpose of autonomous operation.
 
 **Recommendations:**
 - ✅ Use in version-controlled repositories
 - ✅ Review `YOLO_PLAN.md` before execution
 - ✅ Run in sandboxed/development environments
-- ✅ Monitor output (Ctrl+C to abort)
 - ❌ Never use on production systems without review
 
 ## 🏗️ How It Works

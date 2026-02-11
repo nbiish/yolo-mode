@@ -1,10 +1,520 @@
 #!/usr/bin/env python3
+"""
+YOLO Mode Loop with Role-Based Agent Orchestration
+
+Implements the OSA (Orchestrated System of Agents) Framework with:
+- Role-based task routing (Orchestrator, Architect, Coder, Security, QA)
+- Specialized prompts per persona
+- Intelligent task-to-role detection
+- Parallel task execution with dependency detection
+"""
 import argparse
 import subprocess
 import os
 import sys
 import re
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, Dict, List, Tuple, Set
+from dataclasses import dataclass, field
+
+
+# ============================================================================
+# OSA FRAMEWORK - ROLE DEFINITIONS
+# ============================================================================
+
+class RolePersona:
+    """Defines a role persona with keywords and specialized prompts."""
+
+    def __init__(self, name: str, keywords: List[str], system_prompt: str, agent_preference: str = None):
+        self.name = name
+        self.keywords = [kw.lower() for kw in keywords]
+        self.system_prompt = system_prompt
+        self.agent_preference = agent_preference  # Preferred agent for this role
+
+
+# OSA Framework Role Personas based on .claude/OSA_FRAMEWORK.md
+OSA_ROLES: Dict[str, RolePersona] = {
+    "orchestrator": RolePersona(
+        name="Orchestrator",
+        keywords=["plan", "orchestrate", "coordinate", "manage", "organize", "design workflow", "review plan"],
+        system_prompt="""You are the ORCHESTRATOR role in the OSA Framework.
+
+Your responsibilities:
+- Planning and task decomposition
+- Progress tracking and coordination
+- Ensuring tasks are properly ordered
+- Managing dependencies between tasks
+
+Approach: Think systematically, break down complex goals into clear steps.""",
+        agent_preference="gemini"  # Good at orchestration per .osa/OSA.md
+    ),
+
+    "architect": RolePersona(
+        name="Architect",
+        keywords=["architecture", "schema", "design", "structure", "pattern", "interface", "api design", "database design"],
+        system_prompt="""You are the ARCHITECT role in the OSA Framework.
+
+Your responsibilities:
+- System design and architecture
+- Finding and applying patterns
+- Defining structures and interfaces
+- Ensuring scalability and maintainability
+
+Approach: Think in terms of SOLID principles, DRY, KISS, YAGNI.
+Consider the bigger picture and long-term implications.""",
+        agent_preference="claude"
+    ),
+
+    "coder": RolePersona(
+        name="Coder",
+        keywords=["implement", "write", "code", "create", "build", "function", "class", "module", "script"],
+        system_prompt="""You are the CODER role in the OSA Framework.
+
+Your responsibilities:
+- Implementation of designed solutions
+- Writing clean, maintainable code
+- Following coding standards (SOLID, DRY, KISS)
+- Making focused, minimal changes
+
+Approach: Write production-ready code that matches existing style.
+Prioritize clarity and correctness over cleverness.""",
+        agent_preference="qwen"  # Fast code generation per .osa/OSA.md
+    ),
+
+    "security": RolePersona(
+        name="Security",
+        keywords=["security", "audit", "validate", "sanitize", "authenticate", "authorize", "encrypt", "vulnerability", "secure"],
+        system_prompt="""You are the SECURITY role in the OSA Framework.
+
+Your responsibilities:
+- Zero Trust validation of all inputs
+- Ensuring proper authentication/authorization
+- Identifying security vulnerabilities
+- Secret management and encryption
+
+Approach: Verify everything. Sanitize all inputs.
+Apply principle of least privilege. Consider OWASP Top 10.""",
+        agent_preference="opencode"  # Schema validation, security per .osa/OSA.md
+    ),
+
+    "qa": RolePersona(
+        name="QA",
+        keywords=["test", "verify", "check", "validate", "debug", "edge case", "coverage", "benchmark", "inspect"],
+        system_prompt="""You are the QA role in the OSA Framework.
+
+Your responsibilities:
+- Verification of completed work
+- Testing and edge-case analysis
+- Quality assurance and validation
+- Finding bugs and issues
+
+Approach: Be thorough and methodical.
+Test edge cases. Verify assumptions. Document any issues found.""",
+        agent_preference="claude"
+    ),
+}
+
+
+# ============================================================================
+# PARALLEL EXECUTION SYSTEM - SWARM PATTERN
+# ============================================================================
+
+@dataclass
+class Task:
+    """Represents a task with its metadata."""
+    description: str
+    completed: bool = False
+    dependencies: Set[str] = field(default_factory=set)
+    index: int = 0
+
+
+@dataclass
+class TaskResult:
+    """Result of a task execution."""
+    task: Task
+    success: bool
+    output: Optional[str] = None
+    error: Optional[str] = None
+    role_used: str = ""
+    agent_used: str = ""
+
+
+class ParallelExecutor:
+    """
+    Executes tasks in parallel using ThreadPoolExecutor.
+
+    Implements the swarm pattern from .osa/OSA.md:
+    - Detects independent tasks that can run in parallel
+    - Uses ThreadPoolExecutor for concurrent agent execution
+    - Respects task dependencies
+    - Thread-safe plan file updates
+    """
+
+    def __init__(self, max_workers: int = 3):
+        """
+        Initialize the parallel executor.
+
+        Args:
+            max_workers: Maximum number of concurrent agent tasks
+        """
+        self.max_workers = max_workers
+        self.plan_lock = threading.Lock()  # For thread-safe file updates
+
+    def parse_plan_tasks(self, plan_content: str) -> List[Task]:
+        """
+        Parse tasks from plan file content.
+
+        Args:
+            plan_content: The markdown plan content
+
+        Returns:
+            List of Task objects with dependencies
+        """
+        tasks = []
+        lines = plan_content.split('\n')
+
+        for idx, line in enumerate(lines):
+            # Match "- [ ] Task description" or "- [x] Task description"
+            match = re.match(r'^-\s*\[([ x])\]\s*(.+)', line)
+            if match:
+                status_char, description = match.groups()
+                is_completed = status_char == 'x'
+
+                task = Task(
+                    description=description.strip(),
+                    completed=is_completed,
+                    index=idx
+                )
+
+                # Detect dependencies based on keywords
+                task.dependencies = self._detect_dependencies(description, idx)
+
+                if not is_completed:
+                    tasks.append(task)
+
+        return tasks
+
+    def _detect_dependencies(self, task_description: str, task_index: int) -> Set[str]:
+        """
+        Detect if a task depends on previous tasks based on keywords.
+
+        Args:
+            task_description: The task text to analyze
+            task_index: The task's position in the list
+
+        Returns:
+            Set of dependency indicators (empty for independent tasks)
+        """
+        desc_lower = task_description.lower()
+
+        # Keywords indicating dependency on previous tasks
+        dependency_keywords = [
+            "after", "once", "when", "then", "next",
+            "following", "based on", "using previous",
+            "update", "modify", "extend", "refactor"
+        ]
+
+        # If description contains dependency keywords, mark as dependent
+        for kw in dependency_keywords:
+            if kw in desc_lower:
+                return {"previous"}
+
+        # Tasks starting with numbers implicitly depend on prior numbered steps
+        if re.match(r'^\d+\.', task_description):
+            return {"sequential"}
+
+        return set()
+
+    def find_executable_batch(self, tasks: List[Task], completed: Set[str]) -> List[Task]:
+        """
+        Find tasks that can be executed in parallel (no unmet dependencies).
+
+        Args:
+            tasks: List of pending tasks
+            completed: Set of completed task descriptions
+
+        Returns:
+            List of tasks ready to execute
+        """
+        executable = []
+
+        for task in tasks:
+            # Check if all dependencies are satisfied
+            can_execute = True
+
+            if "previous" in task.dependencies or "sequential" in task.dependencies:
+                # These tasks need at least one prior task completed
+                if not completed:
+                    can_execute = False
+
+            if can_execute:
+                executable.append(task)
+
+        return executable
+
+    def execute_task_parallel(
+        self,
+        task: Task,
+        goal: str,
+        plan_file: str,
+        plan_content: str,
+        default_agent: str,
+        use_tts: bool = False
+    ) -> TaskResult:
+        """
+        Execute a single task (meant to be run in a thread).
+
+        Args:
+            task: The task to execute
+            goal: Overall goal
+            plan_file: Path to plan file
+            plan_content: Current plan content
+            default_agent: Default agent to use
+            use_tts: Whether TTS is enabled
+
+        Returns:
+            TaskResult with execution outcome
+        """
+        detected_role = detect_role(task.description)
+        role_agent = get_agent_for_role(detected_role, default_agent)
+
+        print(f"   🧵 [Thread-{threading.current_thread().name}] {task.description[:50]}...")
+        print(f"      🎭 Role: {detected_role.upper()} | 🤖 Agent: {role_agent}")
+
+        worker_prompt = build_role_based_prompt(
+            role=detected_role,
+            task=task.description,
+            goal=goal,
+            plan_content=plan_content,
+            plan_file=plan_file
+        )
+
+        try:
+            output = run_agent(role_agent, worker_prompt, verbose=False)
+
+            success = output is not None
+
+            # Thread-safe plan update
+            if success:
+                self._mark_task_completed(task.description, plan_file)
+
+            return TaskResult(
+                task=task,
+                success=success,
+                output=output,
+                role_used=detected_role,
+                agent_used=role_agent
+            )
+
+        except Exception as e:
+            return TaskResult(
+                task=task,
+                success=False,
+                error=str(e),
+                role_used=detected_role,
+                agent_used=role_agent
+            )
+
+    def _mark_task_completed(self, task_description: str, plan_file: str):
+        """
+        Thread-safe update of plan file to mark task as complete.
+
+        Args:
+            task_description: The task to mark complete
+            plan_file: Path to plan file
+        """
+        with self.plan_lock:
+            try:
+                with open(plan_file, 'r') as f:
+                    content = f.read()
+
+                # Escape special regex characters in task description
+                escaped_desc = re.escape(task_description)
+
+                # Replace "- [ ] task" with "- [x] task"
+                new_content = re.sub(
+                    rf'- \[ \]\s*{escaped_desc}',
+                    f'- [x] {task_description}',
+                    content
+                )
+
+                if new_content != content:
+                    with open(plan_file, 'w') as f:
+                        f.write(new_content)
+                    print(f"      ✅ Marked complete: {task_description[:40]}...")
+
+            except Exception as e:
+                print(f"      ⚠️ Failed to update plan: {e}")
+
+    def execute_plan_parallel(
+        self,
+        plan_content: str,
+        goal: str,
+        plan_file: str,
+        default_agent: str,
+        use_tts: bool = False
+    ) -> List[TaskResult]:
+        """
+        Execute all pending tasks with parallelization where possible.
+
+        Args:
+            plan_content: Current plan file content
+            goal: Overall goal
+            plan_file: Path to plan file
+            default_agent: Default agent from CLI
+            use_tts: Whether TTS is enabled
+
+        Returns:
+            List of TaskResult objects
+        """
+        tasks = self.parse_plan_tasks(plan_content)
+
+        if not tasks:
+            print("✅ No pending tasks to execute.")
+            return []
+
+        print(f"\n🔄 PARALLEL EXECUTION MODE")
+        print(f"   Pending tasks: {len(tasks)}")
+        print(f"   Max workers: {self.max_workers}")
+        print(f"   Strategy: Execute independent tasks concurrently")
+
+        all_results = []
+        completed_tasks = set()
+
+        while tasks:
+            # Find tasks that can run in parallel
+            executable_batch = self.find_executable_batch(tasks, completed_tasks)
+
+            if not executable_batch:
+                # No tasks can execute (likely dependency deadlock)
+                print("⚠️ No executable tasks found. Possible dependency deadlock.")
+                break
+
+            # Limit batch size to max_workers
+            batch = executable_batch[:self.max_workers]
+
+            print(f"\n⚡ Executing batch of {len(batch)} task(s) in parallel...")
+
+            # Execute batch in parallel
+            with ThreadPoolExecutor(max_workers=len(batch)) as executor:
+                futures = {
+                    executor.submit(
+                        self.execute_task_parallel,
+                        task, goal, plan_file, plan_content, default_agent, use_tts
+                    ): task
+                    for task in batch
+                }
+
+                for future in as_completed(futures):
+                    result = future.result()
+                    all_results.append(result)
+
+                    if result.success:
+                        completed_tasks.add(result.task.description)
+
+            # Remove completed tasks from pending list
+            tasks = [t for t in tasks if t.description not in completed_tasks]
+
+            # Reload plan content for next batch
+            if tasks:
+                try:
+                    with open(plan_file, 'r') as f:
+                        plan_content = f.read()
+                except:
+                    pass
+
+        return all_results
+
+
+def detect_role(task_description: str) -> str:
+    """
+    Detect the appropriate OSA role for a given task.
+
+    Args:
+        task_description: The task text to analyze
+
+    Returns:
+        The role name (one of: orchestrator, architect, coder, security, qa)
+    """
+    task_lower = task_description.lower()
+
+    # Count keyword matches for each role
+    role_scores = {}
+    for role_name, role in OSA_ROLES.items():
+        score = sum(1 for kw in role.keywords if kw in task_lower)
+        if score > 0:
+            role_scores[role_name] = score
+
+    # Return role with highest score, or default to 'coder'
+    if role_scores:
+        return max(role_scores, key=role_scores.get)
+
+    # Default fallback for generic tasks
+    return "coder"
+
+
+def get_agent_for_role(role: str, default_agent: str) -> str:
+    """
+    Get the preferred agent for a given role.
+
+    Args:
+        role: The OSA role name
+        default_agent: The default agent from command line
+
+    Returns:
+        The agent name to use
+    """
+    role_obj = OSA_ROLES.get(role)
+    if role_obj and role_obj.agent_preference:
+        return role_obj.agent_preference
+    return default_agent
+
+
+def build_role_based_prompt(role: str, task: str, goal: str, plan_content: str, plan_file: str) -> str:
+    """
+    Build a specialized prompt based on the detected role.
+
+    Args:
+        role: The OSA role name
+        task: The current task description
+        goal: The overall goal
+        plan_content: Current plan file content
+        plan_file: Path to the plan file
+
+    Returns:
+        A specialized prompt for the role
+    """
+    role_obj = OSA_ROLES.get(role, OSA_ROLES["coder"])
+
+    prompt = f"""# OSA Framework - {role_obj.name.upper()} Role
+
+{role_obj.system_prompt}
+
+## Context
+Overall Goal: {goal}
+
+## Current Plan Status
+```
+{plan_content[:2000]}  # Truncate to avoid token overflow
+```
+
+## YOUR CURRENT TASK
+{task}
+
+## Instructions
+1. Execute this task using your {role_obj.name} expertise
+2. Follow the {role_obj.name} guidelines specified above
+3. AFTER successful completion, edit '{plan_file}' to mark this task as '[x]'
+4. Do NOT ask for permission. Make reasonable assumptions if needed.
+
+## Reference
+See .claude/OSA_FRAMEWORK.md for OSA Framework details.
+"""
+
+    return prompt
+
 
 def speak(text, enabled=False):
     """Speaks the text using tts-cli if enabled, with a BLOCKING pause to prevent overlap."""
@@ -13,11 +523,11 @@ def speak(text, enabled=False):
             # Shorten very long texts for TTS
             if len(text) > 100:
                 text = text[:97] + "..."
-            
+
             # Suppress output from tts-cli to avoid cluttering logs
             subprocess.run(["tts-cli", "--text", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
             # Add a small buffer after the command finishes to separate thoughts
-            time.sleep(0.5) 
+            time.sleep(0.5)
         except Exception as e:
             # Silently fail or log to stderr if absolutely needed, but keep main output clean
             pass
@@ -158,34 +668,36 @@ def main():
                 break
                 
             current_task = match.group(1).strip()
+
+            # ============================================================================
+            # ROLE-BASED TASK ROUTING (OSA Framework)
+            # ============================================================================
+            # Detect the appropriate role for this task based on keywords
+            detected_role = detect_role(current_task)
+
+            # Get the best agent for this role (may differ from default agent)
+            role_agent = get_agent_for_role(detected_role, agent)
+
             print(f"🔨 Executing Task: {current_task}")
+            print(f"   🎭 Detected Role: {detected_role.upper()}")
+            if role_agent != agent:
+                print(f"   🤖 Agent Selection: {role_agent} (role-preferred)")
+
             if use_tts:
                 clean_task = clean_text_for_tts(current_task)
                 speak(f"Executing: {clean_task}", True)
-            
-            # Construct Prompt for the worker
-            # We instruct it to update the plan status itself after completion
-            worker_prompt = f"""
-            You are an autonomous worker in a loop using {agent}.
-            
-            Goal: {goal}
-            
-            Current Plan Status (in {plan_file}):
-            {plan_content}
-            
-            YOUR CURRENT TASK: {current_task}
-            
-            Instructions:
-            1. Execute this task strictly. Do not do other tasks.
-            2. If the task requires coding, write the code and verify it.
-            3. AFTER you have successfully completed the task, you MUST edit '{plan_file}' to mark this specific task as completed (change '[ ]' to '[x]').
-            
-            IMPORTANT:
-            - Do not ask for permission.
-            - Update the plan file yourself.
-            """
-            
-            output = run_agent(agent, worker_prompt, verbose=True)
+
+            # Build specialized prompt based on detected role
+            worker_prompt = build_role_based_prompt(
+                role=detected_role,
+                task=current_task,
+                goal=goal,
+                plan_content=plan_content,
+                plan_file=plan_file
+            )
+
+            # Execute with the role-appropriate agent
+            output = run_agent(role_agent, worker_prompt, verbose=True)
             
             if output is None:
                  if use_tts:

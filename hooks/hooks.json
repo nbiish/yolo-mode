@@ -1,15 +1,15 @@
 {
-    "description": "YOLO Mode Ralph Loop hooks",
-    "hooks": {
-        "Stop": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.sh"
-                    }
-                ]
-            }
+  "description": "YOLO Mode stop hook for autonomous loops",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.sh"
+          }
         ]
-    }
+      }
+    ]
+  }
 }

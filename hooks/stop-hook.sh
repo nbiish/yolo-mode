@@ -1,140 +1,93 @@
 #!/bin/bash
 
 # YOLO Mode Stop Hook
-# Drives the autonomous loop by checking YOLO_PLAN.md and feeding prompts back to Claude
+# Prevents session exit when a YOLO loop is active
+# Feeds Claude's output back as input to continue the loop (Ralph Loop Pattern)
 
 set -euo pipefail
 
-# 1. Check if we are in YOLO Mode
+# Read hook input from stdin (advanced stop hook API)
+HOOK_INPUT=$(cat)
+
+# Check if yolo-loop is active
 STATE_FILE=".claude/yolo-state.md"
 PLAN_FILE="YOLO_PLAN.md"
 
-# Auto-detect if this is the first YOLO command invocation
-# If the command contains "YOLO Mode" and state doesn't exist, initialize it
-HOOK_INPUT=$(cat /dev/stdin)
-COMMAND_TEXT=$(echo "$HOOK_INPUT" | jq -r '.command // empty' 2>/dev/null || echo "")
-
-# Check if this is a YOLO command invocation
-if [[ ! -f "$STATE_FILE" ]] && [[ "$COMMAND_TEXT" == *"YOLO Mode"* ]]; then
-  # Initialize YOLO state on first command invocation
-  mkdir -p .claude
-
-  # Determine if this is forever mode based on command
-  MAX_ITERATIONS=50
-  if [[ "$COMMAND_TEXT" == *"Forever"* ]] || [[ "$COMMAND_TEXT" == *"forever"* ]]; then
-    MAX_ITERATIONS=1000
-  fi
-
-  # Extract goal from the command (remove YOLO Mode prefix)
-  GOAL=$(echo "$COMMAND_TEXT" | sed 's/.*YOLO Mode.*for goal: //; s/.*YOLO Mode.*with goal: //; s/.*Initialize autonomous.*: //')
-
-  # Copy OSA Framework
-  cp "${CLAUDE_PLUGIN_ROOT}/yolo_mode/OSA.md" ".claude/OSA_FRAMEWORK.md" 2>/dev/null || true
-
-  # Initialize state file
-  cat > "$STATE_FILE" <<EOF
----
-status: running
-iteration: 0
-max_iterations: $MAX_ITERATIONS
-goal: "$GOAL"
----
-EOF
-
-  echo "🚀 YOLO Mode Initialized."
-  echo "Goal: $GOAL"
-  echo "Max Iterations: $MAX_ITERATIONS"
-fi
-
 if [[ ! -f "$STATE_FILE" ]]; then
-  exit 0 # Not in YOLO mode, allow exit
-fi
-
-# Read status from frontmatter
-STATUS=$(grep "^status:" "$STATE_FILE" | head -n 1 | awk '{print $2}')
-
-if [[ "$STATUS" != "running" ]]; then
-  exit 0 # YOLO mode finished or paused
-fi
-
-# Read other state variables
-ITERATION=$(grep "^iteration:" "$STATE_FILE" | head -n 1 | awk '{print $2}')
-MAX_ITERATIONS=$(grep "^max_iterations:" "$STATE_FILE" | head -n 1 | awk '{print $2}')
-GOAL=$(grep "^goal:" "$STATE_FILE" | cut -d: -f2- | sed 's/^ "//;s/"$//')
-
-# Check hydration
-if [[ -z "$ITERATION" ]]; then ITERATION=0; fi
-if [[ -z "$MAX_ITERATIONS" ]]; then MAX_ITERATIONS=50; fi
-
-# Safety Check
-if [[ "$ITERATION" -ge "$MAX_ITERATIONS" ]]; then
-  echo "🛑 Max iterations ($MAX_ITERATIONS) reached."
-  sed -i '' 's/^status: running/status: stopped/' "$STATE_FILE"
+  # No active loop - allow exit
   exit 0
 fi
 
-# --- RALPH LOOP ROBUSTNESS CHECKS ---
-# Extract transcript path from hook input (already read above)
+# Parse markdown frontmatter
+FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
+ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
+MAX_ITERATIONS=$(echo "$FRONTMATTER" | grep '^max_iterations:' | sed 's/max_iterations: *//')
+GOAL=$(echo "$FRONTMATTER" | grep '^goal:' | sed 's/goal: *//' | sed 's/^"\(.*\)"$/\1/')
+
+# Validate numeric fields
+if [[ ! "$ITERATION" =~ ^[0-9]+$ ]]; then
+  echo "⚠️  YOLO loop: State file corrupted (iteration invalid)" >&2
+  rm "$STATE_FILE"
+  exit 0
+fi
+
+# Check if max iterations reached
+if [[ $MAX_ITERATIONS -gt 0 ]] && [[ $ITERATION -ge $MAX_ITERATIONS ]]; then
+  echo "🛑 YOLO loop: Max iterations ($MAX_ITERATIONS) reached."
+  rm "$STATE_FILE"
+  exit 0
+fi
+
+# Get transcript path from hook input
 TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path')
 
 if [[ ! -f "$TRANSCRIPT_PATH" ]]; then
-  # If we can't read the transcript, we can't safely drive the loop.
-  # But technically we drive from YOLO_PLAN.md, so maybe we don't strictly need it?
-  # Ralph Loop needs it to extract the last message for promises.
-  # We might just log a warning and proceed, OR strictly fail.
-  # Let's proceed but warn.
-  echo "⚠️ Warning: Transcript not found at $TRANSCRIPT_PATH" >&2
-fi
-# ------------------------------------
-
-# 2. Analyze Plan
-NEXT_ACTION=""
-SYSTEM_MSG=""
-
-if [[ ! -f "$PLAN_FILE" ]]; then
-  # Scenario A: No Plan -> Create One
-  NEXT_ACTION="Create a detailed plan to achieve the goal: '$GOAL'. Write it to '$PLAN_FILE'. The file MUST use '- [ ] Task Name' format."
-  SYSTEM_MSG="🔄 YOLO Mode (Iter $ITERATION) | Step 1: Initialize Plan"
-else
-  # Scenario B: Plan Exists -> Find Next Task
-  # Look for first unchecked box "- [ ]"
-  NEXT_TASK=$(grep -m 1 "^- \[ \]" "$PLAN_FILE" || true)
-
-  if [[ -n "$NEXT_TASK" ]]; then
-    # Found a pending task
-    TASK_TEXT=$(echo "$NEXT_TASK" | sed 's/^- \[ \] //')
-    NEXT_ACTION="Execute the next task from $PLAN_FILE: '$TASK_TEXT'. Perform all necessary actions (coding, testing, etc.). AFTER COMPLETION, edit $PLAN_FILE to mark this task as '[x]'. DO NOT ask the user for permission. DO NOT use AskUserQuestion. Make reasonable assumptions if needed."
-    SYSTEM_MSG="🔄 YOLO Mode (Iter $ITERATION) | Role: OSA Orchestrator | Executing: $TASK_TEXT | Ref: yolo_mode/OSA.md"
-  else
-    # Scenario C: All Tasks Done -> Finish
-    NEXT_ACTION="All tasks in $PLAN_FILE are marked completed. Verify the final result against the goal: '$GOAL'. If satisfactory, report success. If not, add new tasks to $PLAN_FILE. DO NOT ask the user for permission."
-    SYSTEM_MSG="🔄 YOLO Mode (Iter $ITERATION) | Role: OSA Orchestrator | Verification Phase"
-    
-    # If we are verifying, we might want to stop after this if no new tasks added.
-    # For now, let Claude decide to stop or add more tasks.
-    # If Claude does nothing and tries to stop again, we need to handle that.
-    # Actually, if Claude says "Done", we should probably let it exit.
-    # But how do we know?
-    # We can check if the LAST iteration was also "All Tasks Done".
-    # For simplicity: execution continues unless Claude explicitly removes the state file or changes status.
-  fi
+  echo "⚠️  YOLO loop: Transcript file not found" >&2
+  rm "$STATE_FILE"
+  exit 0
 fi
 
-# 3. Update State (Increment Iteration)
-NEXT_ITER=$((ITERATION + 1))
-sed -i '' "s/^iteration: $ITERATION/iteration: $NEXT_ITER/" "$STATE_FILE"
+# Check if tasks are complete by reading the plan file
+# If all tasks are marked [x], we can stop (or ask for user feedback)
+if [[ -f "$PLAN_FILE" ]]; then
+    PENDING_TASKS=$(grep -c "\- \[ \]" "$PLAN_FILE" || true)
+    if [[ "$PENDING_TASKS" -eq 0 ]]; then
+        echo "✅ YOLO loop: All tasks in $PLAN_FILE are complete!"
+        rm "$STATE_FILE"
+        exit 0
+    fi
+fi
 
-# 4. Feed Prompt Back to Claude (Block Exit)
-# We use `jq` to construct the JSON response required by the Stop hook
-# Content is passed via stdin to avoid shell escaping issues
+# Not complete - continue loop
+NEXT_ITERATION=$((ITERATION + 1))
 
+# Update iteration in state file
+TEMP_FILE="${STATE_FILE}.tmp.$$"
+sed "s/^iteration: .*/iteration: $NEXT_ITERATION/" "$STATE_FILE" > "$TEMP_FILE"
+mv "$TEMP_FILE" "$STATE_FILE"
+
+# Construct the prompt to feed back
+# We remind the agent of the goal and to check the plan
+FEEDBACK_PROMPT="
+🔄 YOLO Iteration $NEXT_ITERATION
+Goal: $GOAL
+
+Please check '$PLAN_FILE' for the next pending task (- [ ]).
+1. Execute the next task.
+2. Mark it as [x] in the plan when done.
+3. If you are stuck, update the plan with new findings.
+"
+
+SYSTEM_MSG="🔄 YOLO Mode Active | Iteration $NEXT_ITERATION/$MAX_ITERATIONS | Auto-driving..."
+
+# Output JSON to block the stop and feed prompt back
 jq -n \
-  --arg reason "$NEXT_ACTION" \
-  --arg system "$SYSTEM_MSG" \
+  --arg prompt "$FEEDBACK_PROMPT" \
+  --arg msg "$SYSTEM_MSG" \
   '{
     "decision": "block",
-    "reason": $reason,
-    "systemMessage": $system
+    "reason": $prompt,
+    "systemMessage": $msg
   }'
 
 exit 0

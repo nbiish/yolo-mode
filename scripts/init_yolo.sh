@@ -44,6 +44,7 @@ EOF
 echo "🚀 YOLO Mode Initialized."
 echo "Goal: $GOAL"
 echo "State File: $STATE_FILE"
+echo "⚠️  TIP: For TRUE zero-interaction, allow all tools or run: claude --dangerously-skip-permissions"
 
 # Check if PLAN_FILE exists
 # Check if PLAN_FILE exists, if not create it with OSA Guidance
