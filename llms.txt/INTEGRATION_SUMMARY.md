@@ -52,11 +52,11 @@ yolo-mode "Write a sudoku game" --agent mini
 from yolo_mode.agents import MiniSweAgentRunner, run_mini_swe_agent
 
 # Using the runner class
-runner = MiniSweAgentRunner(model_name="gpt-4o")
+runner = MiniSweAgentRunner(model_name="gpt-4.1")
 result = runner.run("Write a function to calculate fibonacci")
 
 # Using convenience function
-result = run_mini_swe_agent("Create a Flask API", model="gpt-4o")
+result = run_mini_swe_agent("Create a Flask API", model="gpt-4.1")
 ```
 
 ## Agent Configuration

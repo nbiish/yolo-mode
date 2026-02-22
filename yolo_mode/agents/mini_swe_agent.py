@@ -16,7 +16,7 @@ class MiniSweResult:
 class MiniSweAgentRunner:
     """Runner for mini-swe-agent."""
     
-    def __init__(self, model_name: str = "gpt-4o", timeout: int = 300, verbose: bool = True):
+    def __init__(self, model_name: str = "minimax/minimax-m2.5", timeout: int = 300, verbose: bool = True):
         self.model_name = model_name
         self.timeout = timeout
         self.verbose = verbose
@@ -47,7 +47,7 @@ class MiniSweAgentRunner:
         except Exception as e:
             return MiniSweResult(success=False, output="", error=str(e))
 
-def run_mini_swe_agent(task: str, model: str = "gpt-4o", timeout: int = 300) -> MiniSweResult:
+def run_mini_swe_agent(task: str, model: str = "minimax/minimax-m2.5", timeout: int = 300) -> MiniSweResult:
     """Convenience function to run mini-swe-agent."""
     runner = MiniSweAgentRunner(model_name=model, timeout=timeout)
     return runner.run(task)

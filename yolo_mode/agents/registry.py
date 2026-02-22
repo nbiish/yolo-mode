@@ -128,7 +128,7 @@ AGENT_REGISTRY: Dict[str, AgentConfig] = {
         cli_command="claude",
         yolo_flag="--dangerously-skip-permissions",
         prompt_position="last",
-        preferred_models=["claude-sonnet-4", "claude-opus-4"],
+        preferred_models=["claude-sonnet-4.5", "claude-opus-4"],
         osa_roles={OSARole.ARCHITECT, OSARole.QA},
         capabilities={
             AgentCapability.ARCHITECTURE_DESIGN,
@@ -166,7 +166,7 @@ AGENT_REGISTRY: Dict[str, AgentConfig] = {
         cli_command="mini",
         yolo_flag="",  # Always runs in autonomous mode
         prompt_position="last",
-        preferred_models=["gpt-4o", "claude-sonnet-4"],
+        preferred_models=["minimax/minimax-m2.5", "gpt-4.1", "claude-sonnet-4.5"],
         osa_roles={OSARole.CODER, OSARole.QA},
         capabilities={
             AgentCapability.CODE_GENERATION,
