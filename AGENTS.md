@@ -2,19 +2,34 @@
 
 ```xml
 <agent>
-Approach: Security-first, Zero Trust, Standardized  
-Output: Production-ready, tested, encrypted, PQC-compliant  
+Approach: Security-first, Zero Trust, Standardized
+Output: Production-ready, tested, encrypted, PQC-compliant, secure by default
 </agent>
-
-Use `tts-cli --text "<text>"` to generate audio for the user to concisely summarize your actions and decisions, or `local-tts-mcp` if `tts-cli` is not available.
 
 <coding>
 Universal Standards:
-Match existing codebase style
-SOLID, DRY, KISS, YAGNI
-Small, focused changes over rewrites
-Never create dummy code
-Websearch the facts
+- Match existing codebase style
+- Small, focused changes over rewrites
+- Never create dummy, filler, or simulated code
+- Never make waste files outside of the workspace
+- Websearch, `fetch`, `curl`, etc the facts from online sources
+- Well documented code saves lives and time
+
+SOLID — A set of 5 object-oriented design principles:
+- Single Responsibility — A class should do only one thing
+- Open/Closed — Open for extension, closed for modification
+- Liskov Substitution — Subclasses should be replaceable by their parent class
+- Interface Segregation — Don't force classes to implement interfaces they don't need
+- Dependency Inversion — Depend on abstractions, not concrete implementations
+
+DRY — Don't Repeat Yourself:
+- Avoid duplicating code/logic. If you write the same thing twice, extract it into a reusable function or module.
+
+YAGNI — You Aren't Gonna Need It:
+- Don't build features "just in case." Only code what you actually need right now.
+
+KISS — Keep It Simple, Stupid:
+- Don't over-engineer. The simplest solution that works is usually the best one.
 
 By Language:
 | Language | Standards |
@@ -57,7 +72,4 @@ Post-Quantum Crytography (NIST FIPS Standards)
 </security>
 
 Git Commits: `<type>(<scope>): <description>` — feat|fix|docs|refactor|test|chore|perf|ci
-
-**Important**:  Follow the critical security, best-practices, and coding standards rules while informing the user of your actions and decisions via tts-cli or local-tts-mcp upon completion of the task.
-
 ```

@@ -160,6 +160,23 @@ AGENT_REGISTRY: Dict[str, AgentConfig] = {
         priority=5,
         description="Schema validation and security-focused reviews",
     ),
+
+    "mini": AgentConfig(
+        name="Mini-SWE-Agent",
+        cli_command="mini",
+        yolo_flag="",  # Always runs in autonomous mode
+        prompt_position="last",
+        preferred_models=["gpt-4o", "claude-sonnet-4"],
+        osa_roles={OSARole.CODER, OSARole.QA},
+        capabilities={
+            AgentCapability.CODE_GENERATION,
+            AgentCapability.TESTING,
+            AgentCapability.VALIDATION,
+        },
+        env_vars={},
+        priority=6,
+        description="100-line AI agent for SWE tasks (>74% SWE-bench verified)",
+    ),
 }
 
 

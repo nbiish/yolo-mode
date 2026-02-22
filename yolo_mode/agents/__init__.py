@@ -7,6 +7,7 @@ Provides unified interface for CLI-based agentic coding tools including:
 - Crush CLI (permission-based security)
 - Claude Code (high-quality reasoning)
 - OpenCode (security-focused reviews)
+- Mini-SWE-Agent (100-line AI agent for SWE tasks)
 
 This module centralizes agent configuration, execution, and role-based routing
 for the OSA (Orchestrated System of Agents) Framework.
@@ -29,7 +30,8 @@ Components:
     - registry: Agent configurations and selection logic
     - runner: Unified agent execution interface
     - role_detection: Task-to-role mapping with keyword detection
-    - resource_aware: Contract-aware agent selection (future)
+    - resource_aware: Contract-aware agent selection
+    - mini_swe_agent: Mini-SWE-Agent integration
 
 Based on research from:
     - reference/CLI_AGENT_INTEGRATION_RESEARCH.md
@@ -115,6 +117,14 @@ from .resource_aware import (
     print_selection_stats,
 )
 
+# Mini-SWE-Agent integration
+from .mini_swe_agent import (
+    MiniSweAgentRunner,
+    MiniSweResult,
+    run_mini_swe_agent,
+    is_mini_available,
+)
+
 __all__ = [
     # Enums
     "AgentCapability",
@@ -180,6 +190,12 @@ __all__ = [
     "AgentOverride",
     "CustomAgent",
     "AgentConfigFile",
+
+    # Mini-SWE-Agent
+    "MiniSweAgentRunner",
+    "MiniSweResult",
+    "run_mini_swe_agent",
+    "is_mini_available",
 ]
 
 # Version info

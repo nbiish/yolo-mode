@@ -1,4 +1,5 @@
 # AINISH Coder Tooling Distribution - Git Ignore Patterns
+# PlatformIO ignore patterns
 
 # ai pair programmer files
 .cursor/
@@ -13,7 +14,12 @@
 .windsurf/
 .aider*
 .trae/
-docs/
+
+# PlatformIO ignore patterns
+.pio*
+.pio/
+*.pioenvs/
+pio.ini
 
 # Environment and configuration files
 .env
@@ -98,7 +104,6 @@ dist/
 # General
 *.log
 *.tmp
-YOLO_PLAN.md
 *.new
 tmp/
 
@@ -110,4 +115,11 @@ yarn-error.log
 
 # Security reports
 SECURITY_REPORT.md
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Project-specific patterns (preserved from existing .gitignore)
+# ═══════════════════════════════════════════════════════════════════════════
+
+YOLO_PLAN.md
+docs/
 

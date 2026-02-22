@@ -1,5 +1,13 @@
 # TODO
 
+## Completed (v0.2.0)
+
+- [x] **Mini-SWE-Agent Integration:** Integrated mini-swe-agent as a first-class agent with Python API and CLI support.
+- [x] **Agent Registry Extension:** Added mini-swe-agent to the unified agent registry with OSA role mappings.
+- [x] **Mini-SWE-Agent Documentation:** Created comprehensive documentation in `llms.txt/MINI_SWE_AGENT.md`.
+- [x] **Slash Command for Mini:** Created `/yolo-mini` command for mini-swe-agent autonomous execution.
+- [x] **Architecture Updates:** Updated `llms.txt/ARCHITECTURE.md` with mini-swe-agent integration details.
+
 ## Completed (v0.1.9)
 
 - [x] **Unified Agent Framework:** Implemented contract-aware agent selection and resource management.
@@ -25,8 +33,8 @@
 
 ## In Progress / Release Preparation
 
-- [ ] **Version Bump:** Ensure all version references are 0.1.9
-- [ ] **Final Verification:** Test full loop with new OSA roles.
+- [ ] **Version Bump:** Update all version references to 0.2.0
+- [ ] **Final Verification:** Test mini-swe-agent integration with full YOLO loop.
 - [ ] **Official Release:** Push to GitHub and verify marketplace installation.
 
 ## Future Improvements
@@ -37,3 +45,5 @@
 - [ ] **Web Search Skill:** Integrate web search capability into the sub-agents.
 - [ ] **Progress Visualization:** Add progress bars or real-time plan updates.
 - [ ] **Checkpoint System:** Save and resume long-running missions.
+- [ ] **Docker Sandbox Support:** Integrate mini-swe-agent's Docker/Podman sandboxing for isolated execution.
+- [ ] **Batch Inference:** Support mini-swe-agent's batch processing for multiple tasks.

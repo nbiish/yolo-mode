@@ -555,9 +555,9 @@ def speak(text, enabled=False):
 
 def run_agent(agent, prompt, verbose=False):
     """Runs the specified agent in autonomous mode."""
-    
+
     cmd = []
-    
+
     if agent == "claude":
         cmd = [
             "claude",
@@ -578,6 +578,9 @@ def run_agent(agent, prompt, verbose=False):
         cmd = ["qwen", "--yolo", prompt]
     elif agent == "crush":
         cmd = ["crush", "run", prompt]
+    elif agent == "mini":
+        # Mini-SWE-Agent - always runs in autonomous mode
+        cmd = ["mini", prompt]
     else:
         # Fallback for generic tools that might support the prompt as last arg
         # or we could error out. For now, assume a simple pass-through if unknown,
@@ -616,7 +619,7 @@ def main():
     parser = argparse.ArgumentParser(description="YOLO Mode Loop")
     parser.add_argument("prompt", nargs="+", help="The main goal/prompt")
     parser.add_argument("--tts", action="store_true", help="Enable TTS output via tts-cli")
-    parser.add_argument("--agent", default="claude", help="The CLI agent to use (claude, opencode, gemini, qwen, crush, etc.)")
+    parser.add_argument("--agent", default="claude", help="The CLI agent to use (claude, opencode, gemini, qwen, crush, mini, etc.)")
     parser.add_argument("--contract-mode", choices=["urgent", "economical", "balanced"], default="balanced",
                         help="Contract mode for resource management (default: balanced)")
     args = parser.parse_args()

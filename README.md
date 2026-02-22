@@ -1,6 +1,6 @@
 # YOLO Mode Plugin for Claude Code
 
-[![Version](https://img.shields.io/badge/version-0.1.9-blue)](https://github.com/nbiish/yolo-mode)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/nbiish/yolo-mode)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > **Transform Claude Code into a self-driving developer**
@@ -16,6 +16,7 @@
 - **💬 Interactive**: Post-mission feedback loop for refinement
 - **⚡ Zero-Trust/YOLO**: Uses `--dangerously-skip-permissions` for maximum autonomy
 - **🎯 Dual Mode**: Works as Claude Code plugin OR standalone CLI
+- **🚀 Mini-SWE-Agent**: Integrated support for the ~100-line AI agent (>74% SWE-bench)
 
 ## 🚀 Quick Start
 
@@ -68,6 +69,10 @@ yolo-mode "Refactor database schema" --agent opencode
 # With Google Gemini
 yolo-mode "Generate documentation" --agent gemini
 
+# With Mini-SWE-Agent (NEW in v0.2.0)
+yolo-mode "Write a sudoku game" --agent mini
+/yolo-mini "Create unit tests for utils.py"  # Slash command
+
 # With voice feedback
 yolo-mode "Build a dashboard" --tts
 
@@ -84,6 +89,7 @@ yolo-mode "Set up a CI/CD pipeline with GitHub Actions, Docker, and AWS deployme
   - **Gemini CLI**
   - **Qwen**
   - **Crush**
+  - **Mini-SWE-Agent** - `pip install mini-swe-agent` (NEW in v0.2.0)
 - **tts-cli** (optional) - For voice feedback
 
 ## ⚠️ Anti-Stall & Zero Interaction
@@ -139,9 +145,11 @@ yolo-mode/
 - **[ARCHITECTURE](llms.txt/ARCHITECTURE.md)** - System design and data flow
 - **[RULES](llms.txt/RULES.md)** - Development standards
 - **[TODO](llms.txt/TODO.md)** - Roadmap and status
+- **[MINI_SWE_AGENT](llms.txt/MINI_SWE_AGENT.md)** - Mini-SWE-Agent integration guide
 
 ## 🔄 Version History
 
+- **v0.2.0** - Mini-SWE-Agent integration, `/yolo-mini` command, updated agent registry
 - **v0.1.1** - Fixed slash commands, proper `commands/*.md` structure
 - **v0.1.0** - Initial release with Ralph Loop pattern
 
