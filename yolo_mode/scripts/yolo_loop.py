@@ -17,6 +17,9 @@ import sys
 import re
 import time
 import threading
+import shlex
+import shutil
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, List, Tuple, Set
 from dataclasses import dataclass, field
@@ -28,7 +31,7 @@ try:
     from yolo_mode.agents import (
         AGENT_REGISTRY,
         detect_role_and_agent,
-        run_agent,
+        run_agent as run_agent_new,
         OSARole,
         ResourceAwareSelector,
         build_contract_aware_prompt,
@@ -527,8 +530,10 @@ Overall Goal: {goal}
 ## Instructions
 1. Execute this task using your {role_obj.name} expertise
 2. Follow the {role_obj.name} guidelines specified above
-3. AFTER successful completion, edit '{plan_file}' to mark this task as '[x]'
-4. Do NOT ask for permission. Make reasonable assumptions if needed.
+3. Do NOT edit '{plan_file}' unless the task explicitly requires updating it.
+4. Do NOT mark tasks as complete in '{plan_file}'. The orchestrator will verify and mark completion.
+5. If you make code changes, ensure they are verified by the project's verification commands (tests/lints/build).
+6. Do NOT ask for permission. Make reasonable assumptions if needed.
 
 ## Reference
 See .claude/OSA_FRAMEWORK.md for OSA Framework details.
@@ -537,23 +542,283 @@ See .claude/OSA_FRAMEWORK.md for OSA Framework details.
     return prompt
 
 
+def _slice_section(markdown: str, header_pattern: str) -> str:
+    lines = markdown.splitlines()
+    header_re = re.compile(header_pattern, re.IGNORECASE)
+    start_idx = None
+    for i, line in enumerate(lines):
+        if header_re.match(line.strip()):
+            start_idx = i + 1
+            break
+    if start_idx is None:
+        return ""
+    end_idx = len(lines)
+    for j in range(start_idx, len(lines)):
+        if re.match(r"^\s*#{1,6}\s+\S+", lines[j]):
+            end_idx = j
+            break
+    return "\n".join(lines[start_idx:end_idx]).strip()
+
+
+def _extract_bash_code_fences(markdown: str) -> List[str]:
+    cmds: List[str] = []
+    in_fence = False
+    fence_lang = ""
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_fence:
+                in_fence = True
+                fence_lang = stripped[3:].strip().lower()
+            else:
+                in_fence = False
+                fence_lang = ""
+            continue
+        if in_fence and (fence_lang in ("", "bash", "sh", "shell", "zsh", "fish")):
+            if stripped:
+                cmds.append(stripped)
+    return cmds
+
+
+def _extract_inline_command_bullets(markdown: str) -> List[str]:
+    cmds: List[str] = []
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith(("-", "*")):
+            continue
+        m = re.search(r"(verify|verification|run)\s*:\s*`([^`]+)`", stripped, re.IGNORECASE)
+        if m:
+            cmds.append(m.group(2).strip())
+            continue
+        m = re.search(r"(verify|verification|run)\s*:\s*(.+)$", stripped, re.IGNORECASE)
+        if m:
+            candidate = m.group(2).strip()
+            if candidate.startswith("`") and candidate.endswith("`") and len(candidate) >= 2:
+                candidate = candidate[1:-1].strip()
+            if candidate:
+                cmds.append(candidate)
+    return cmds
+
+
+def _is_safe_verification_command(cmd: str) -> bool:
+    forbidden = [";", "|", "&", ">", "<", "\n", "\r"]
+    if any(ch in cmd for ch in forbidden):
+        return False
+    lowered = cmd.strip().lower()
+    if not lowered:
+        return False
+    if lowered.startswith(("sudo ", "rm ", "rm\t", "chmod ", "chown ", "curl ", "wget ")):
+        return False
+    if " -c " in f" {lowered} " and lowered.startswith(("bash", "sh", "zsh")):
+        return False
+    return True
+
+
+def _normalize_commands(cmds: List[str]) -> List[str]:
+    normalized: List[str] = []
+    seen: Set[str] = set()
+    for cmd in cmds:
+        c = cmd.strip()
+        if not c:
+            continue
+        if not _is_safe_verification_command(c):
+            continue
+        if c not in seen:
+            normalized.append(c)
+            seen.add(c)
+    return normalized
+
+
+def extract_verification_commands(plan_content: str) -> List[str]:
+    acceptance = _slice_section(plan_content, r"^\s*#{1,6}\s+Acceptance\s*$")
+    if not acceptance:
+        acceptance = _slice_section(plan_content, r"^\s*#{1,6}\s+Acceptance\s+Criteria\s*$")
+    if not acceptance:
+        return []
+    cmds = []
+    cmds.extend(_extract_bash_code_fences(acceptance))
+    cmds.extend(_extract_inline_command_bullets(acceptance))
+    return _normalize_commands(cmds)
+
+
+def detect_default_verification_commands(repo_root: str) -> List[str]:
+    root = Path(repo_root)
+    cmds: List[str] = []
+    if (root / "pyproject.toml").exists() or (root / "setup.py").exists():
+        if (root / "tests").exists():
+            cmds.append("python -m pytest -q")
+            cmds.append("python -m unittest discover -q")
+        cmds.append("python -m compileall yolo_mode")
+    if (root / "package.json").exists():
+        cmds.append("npm test")
+    if (root / "go.mod").exists():
+        cmds.append("go test ./...")
+    if (root / "Cargo.toml").exists():
+        cmds.append("cargo test")
+    return _normalize_commands(cmds)
+
+
+def _command_is_runnable(cmd: str) -> bool:
+    try:
+        parts = shlex.split(cmd)
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    exe = parts[0]
+    return shutil.which(exe) is not None
+
+
+def run_verification(commands: List[str], timeout_s: int = 900) -> Tuple[bool, str]:
+    runnable = [c for c in commands if _command_is_runnable(c)]
+    if not runnable:
+        return False, "No runnable verification command found (Acceptance section missing or tools not on PATH)."
+    last_output = ""
+    for cmd in runnable:
+        try:
+            parts = shlex.split(cmd)
+            result = subprocess.run(parts, capture_output=True, text=True, timeout=timeout_s)
+            last_output = (result.stdout or "") + ("\n" + result.stderr if result.stderr else "")
+            if result.returncode != 0:
+                tail = "\n".join(last_output.splitlines()[-50:])
+                return False, f"Verification failed: `{cmd}`\n{tail}".strip()
+        except subprocess.TimeoutExpired:
+            return False, f"Verification timed out after {timeout_s}s: `{cmd}`"
+        except Exception as e:
+            return False, f"Verification error for `{cmd}`: {e}"
+    return True, f"Verification passed: {', '.join(f'`{c}`' for c in runnable)}"
+
+
+def _git_available() -> bool:
+    return shutil.which("git") is not None
+
+
+def _run_git(args: List[str], cwd: Optional[str] = None) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+
+
+def _git_porcelain(cwd: str) -> Optional[str]:
+    res = _run_git(["status", "--porcelain"], cwd=cwd)
+    if res.returncode != 0:
+        return None
+    return res.stdout.strip()
+
+
+def _git_head(cwd: str) -> Optional[str]:
+    res = _run_git(["rev-parse", "HEAD"], cwd=cwd)
+    if res.returncode != 0:
+        return None
+    return res.stdout.strip()
+
+
+def _git_untracked(cwd: str) -> Set[str]:
+    res = _run_git(["ls-files", "--others", "--exclude-standard"], cwd=cwd)
+    if res.returncode != 0:
+        return set()
+    paths = set()
+    for line in res.stdout.splitlines():
+        p = line.strip()
+        if p:
+            paths.add(p)
+    return paths
+
+
+def _safe_remove_paths(repo_root: str, rel_paths: Set[str]) -> None:
+    root = Path(repo_root).resolve()
+    for rel in rel_paths:
+        if rel.startswith(("/", "\\")) or ".." in Path(rel).parts:
+            continue
+        target = (root / rel).resolve()
+        if root not in target.parents and target != root:
+            continue
+        if target.is_file() or target.is_symlink():
+            try:
+                target.unlink()
+            except Exception:
+                pass
+        elif target.is_dir():
+            try:
+                shutil.rmtree(target)
+            except Exception:
+                pass
+
+
+def snapshot_repo_state(repo_root: str) -> Optional[Dict[str, object]]:
+    if not _git_available():
+        return None
+    if not (Path(repo_root) / ".git").exists():
+        return None
+    porcelain = _git_porcelain(repo_root)
+    head = _git_head(repo_root)
+    if porcelain is None or head is None:
+        return None
+    if porcelain:
+        return None
+    return {
+        "head": head,
+        "untracked": _git_untracked(repo_root),
+        "porcelain": porcelain,
+    }
+
+
+def rollback_repo_state(repo_root: str, snapshot: Dict[str, object]) -> bool:
+    head = snapshot.get("head")
+    if not isinstance(head, str) or not head:
+        return False
+    res = _run_git(["reset", "--hard", head], cwd=repo_root)
+    if res.returncode != 0:
+        return False
+    before_untracked = snapshot.get("untracked", set())
+    if isinstance(before_untracked, set):
+        after_untracked = _git_untracked(repo_root)
+        new_untracked = after_untracked - before_untracked
+        _safe_remove_paths(repo_root, new_untracked)
+    porcelain_after = _git_porcelain(repo_root)
+    return porcelain_after == ""
+
+
+def mark_task_completed(plan_file: str, task_description: str) -> bool:
+    try:
+        with open(plan_file, "r") as f:
+            content = f.read()
+        escaped_desc = re.escape(task_description)
+        new_content = re.sub(
+            rf"-\s*\[\s*\]\s*{escaped_desc}",
+            f"- [x] {task_description}",
+            content,
+            count=1,
+        )
+        if new_content == content:
+            return False
+        with open(plan_file, "w") as f:
+            f.write(new_content)
+        return True
+    except Exception:
+        return False
+
+
 def speak(text, enabled=False):
-    """Speaks the text using tts-cli if enabled, with a BLOCKING pause to prevent overlap."""
+    """Speaks the text using a configurable TTS command if enabled, with a BLOCKING pause to prevent overlap."""
     if enabled:
         try:
+            tts_command = os.environ.get("YOLO_TTS_COMMAND", "tts-cli").strip() or "tts-cli"
             # Shorten very long texts for TTS
             if len(text) > 100:
                 text = text[:97] + "..."
 
-            # Suppress output from tts-cli to avoid cluttering logs
-            subprocess.run(["tts-cli", "--text", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            subprocess.run(
+                [tts_command, "--text", text],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
             # Add a small buffer after the command finishes to separate thoughts
             time.sleep(0.5)
         except Exception as e:
             # Silently fail or log to stderr if absolutely needed, but keep main output clean
             pass
 
-def run_agent(agent, prompt, verbose=False):
+def run_agent_legacy(agent, prompt, verbose=False):
     """Runs the specified agent in autonomous mode."""
 
     cmd = []
@@ -611,6 +876,11 @@ def run_agent(agent, prompt, verbose=False):
         print(f"❌ Agent '{agent}' not found in PATH.")
         return None
 
+def run_agent(agent, prompt, verbose=False):
+    if NEW_AGENTS_AVAILABLE:
+        return run_agent_new(agent, prompt, verbose=verbose)
+    return run_agent_legacy(agent, prompt, verbose=verbose)
+
 def clean_text_for_tts(text):
     """Removes markdown and other noise for clearer speech."""
     return text.replace('`', '').replace('*', '').replace('#', '').strip()
@@ -618,7 +888,7 @@ def clean_text_for_tts(text):
 def main():
     parser = argparse.ArgumentParser(description="YOLO Mode Loop")
     parser.add_argument("prompt", nargs="+", help="The main goal/prompt")
-    parser.add_argument("--tts", action="store_true", help="Enable TTS output via tts-cli")
+    parser.add_argument("--tts", action="store_true", help="Enable TTS output (default command: tts-cli; override with YOLO_TTS_COMMAND)")
     parser.add_argument("--agent", default="claude", help="The CLI agent to use (claude, opencode, gemini, qwen, crush, mini, etc.)")
     parser.add_argument("--contract-mode", choices=["urgent", "economical", "balanced"], default="balanced",
                         help="Contract mode for resource management (default: balanced)")
@@ -664,9 +934,11 @@ def main():
             Create a detailed plan to achieve this goal. 
             Write the plan to a file named '{plan_file}'.
             
-            The file format MUST be:
-            - [ ] Task description
-            - [ ] Another task
+            The file format MUST include:
+            - An Acceptance section with completion criteria and verification commands
+            - A Todo section with checklist items in this exact format:
+              - [ ] Task description
+              - [ ] Another task
             
             Do not include any completed tasks yet. Just the initial plan.
             Use the available tools (Bash, Write, etc.) to create the file.
@@ -706,6 +978,10 @@ def main():
                 break
                 
             current_task = match.group(1).strip()
+            repo_root = os.getcwd()
+            verification_cmds = extract_verification_commands(plan_content)
+            if not verification_cmds:
+                verification_cmds = detect_default_verification_commands(repo_root)
 
             # ============================================================================
             # ROLE-BASED TASK ROUTING (OSA Framework)
@@ -767,53 +1043,95 @@ def main():
                 clean_task = clean_text_for_tts(current_task)
                 speak(f"Executing: {clean_task}", True)
 
-            # Check contract status before execution
-            if contract:
-                can_proceed, reason = contract.can_proceed()
-                if not can_proceed:
-                    print(f"🛑 Contract constraint: {reason}")
+            allow_plan_edits = "YOLO_PLAN.md" in current_task or "yolo_plan.md" in current_task
+            max_attempts_per_task = 3
+            task_completed = False
+            failure_summary = ""
+
+            for attempt in range(1, max_attempts_per_task + 1):
+                if contract:
+                    can_proceed, reason = contract.can_proceed()
+                    if not can_proceed:
+                        print(f"🛑 Contract constraint: {reason}")
+                        if use_tts:
+                            speak(f"Contract constraint reached: {reason}", True)
+                        break
+
+                if attempt > 1:
+                    print(f"   🔁 Retry {attempt}/{max_attempts_per_task}")
+
+                snapshot = snapshot_repo_state(repo_root)
+                if snapshot is None and _git_available() and (Path(repo_root) / ".git").exists():
+                    porcelain = _git_porcelain(repo_root)
+                    if porcelain:
+                        print("   ⚠️ Repo is dirty; rollback-on-failure disabled for this attempt.")
+
+                attempt_prompt = worker_prompt
+                if attempt > 1 and failure_summary:
+                    attempt_prompt = (
+                        worker_prompt
+                        + "\n\n## Previous Attempt Failure\n"
+                        + failure_summary
+                        + "\n\nFix the issue, keep changes minimal, and ensure verification passes."
+                    )
+
+                output = run_agent(role_agent, attempt_prompt, verbose=True)
+
+                if contract and output:
+                    estimated_tokens = len(str(output)) // 4
+                    contract.consume_resource(ResourceDimension.TOKENS, estimated_tokens)
+                    contract.consume_resource(ResourceDimension.ITERATIONS, 1)
+
+                    status = contract.get_status()
+                    max_util = status["max_utilization"]
+                    if max_util > 0.8:
+                        print(f"   📊 High utilization: {max_util*100:.0f}%")
+                        if use_tts:
+                            speak(f"Resource usage at {max_util*100:.0f} percent", True)
+
+                if output is None:
+                    failure_summary = "Agent execution failed (no output)."
+                    print(f"   ❌ {failure_summary}")
+                    if snapshot:
+                        rollback_repo_state(repo_root, snapshot)
+                    continue
+
+                if not allow_plan_edits:
+                    try:
+                        with open(plan_file, "r") as f:
+                            plan_after = f.read()
+                        if plan_after != plan_content:
+                            with open(plan_file, "w") as f:
+                                f.write(plan_content)
+                    except Exception:
+                        pass
+
+                ok, verify_summary = run_verification(verification_cmds, timeout_s=900)
+                if ok:
+                    if mark_task_completed(plan_file, current_task):
+                        print(f"   ✅ Verified + marked complete: {current_task}")
+                    else:
+                        print("   ⚠️ Verification passed but task could not be marked complete in the plan.")
                     if use_tts:
-                        speak(f"Contract constraint reached: {reason}", True)
+                        speak(f"Completed: {clean_task}", True)
+                    task_completed = True
                     break
 
-            # Execute with the role-appropriate agent
-            output = run_agent(role_agent, worker_prompt, verbose=True)
+                failure_summary = verify_summary
+                print(f"   ❌ {verify_summary}")
+                if snapshot:
+                    rolled_back = rollback_repo_state(repo_root, snapshot)
+                    if not rolled_back:
+                        print("   ⚠️ Rollback attempted but repo state could not be fully restored.")
+                time.sleep(1)
 
-            # Track resource consumption after execution
-            if contract and output:
-                # Estimate token consumption based on output length
-                estimated_tokens = len(str(output)) // 4  # Rough estimate
-                contract.consume_resource(ResourceDimension.TOKENS, estimated_tokens)
-                contract.consume_resource(ResourceDimension.ITERATIONS, 1)
+            if not task_completed:
+                print("🛑 Task failed verification after retries; leaving it pending.")
+                if use_tts:
+                    speak("Task failed verification and remains pending.", True)
+                break
 
-                # Print contract status
-                status = contract.get_status()
-                max_util = status["max_utilization"]
-                if max_util > 0.8:
-                    print(f"   📊 High utilization: {max_util*100:.0f}%")
-                    if use_tts:
-                        speak(f"Resource usage at {max_util*100:.0f} percent", True)
-            
-            if output is None:
-                 if use_tts:
-                     speak(f"Error executing task: {clean_task}", True)
-            
-            # Verification: Check if plan was updated
-            with open(plan_file, "r") as f:
-                new_content = f.read()
-                
-            if plan_content != new_content:
-                # Plan changed, assume success
-                if use_tts:
-                    speak(f"Completed task: {clean_task}", True)
-            else:
-                print("⚠️ Warning: Plan was not updated.")
-                if use_tts:
-                    speak("Warning: Plan not updated.", True)
-                
-                # Simple retry prevention logic could go here
-            
-            time.sleep(1) # Brief pause
+            time.sleep(1)
 
         if iteration >= max_iterations:
             print("🛑 Max iterations reached. Stopping.")
