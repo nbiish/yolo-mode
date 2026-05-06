@@ -69,8 +69,9 @@ echo "Goal: $GOAL"
 if [[ "$TTS_ENABLED" == "true" ]]; then
     echo "🔊 TTS Enabled"
     # Announce start if TTS is enabled
-    if command -v tts-cli &> /dev/null; then
-        tts-cli --text "YOLO Mode Initialized. Goal: $GOAL" >/dev/null 2>&1 || true
+    TTS_COMMAND="${YOLO_TTS_COMMAND:-tts-cli}"
+    if command -v "$TTS_COMMAND" &> /dev/null; then
+        "$TTS_COMMAND" --text "YOLO Mode Initialized. Goal: $GOAL" >/dev/null 2>&1 || true
     fi
 fi
 echo "State File: $STATE_FILE"
@@ -85,8 +86,13 @@ Goal: $GOAL
 ## Guidance
 **Reference:** \`.claude/OSA_FRAMEWORK.md\` (Read this to understand your Agentic Team roles)
 
+## Acceptance
+- Criteria: TBD
+- Verification commands (fast, local): TBD
+
 ## Todo
 - [ ] Analyze the goal and create a detailed plan using OSA patterns
+- [ ] Define acceptance criteria + verification commands (tests/build/lint) in the Acceptance section
 EOF
     echo "📋 Created initial plan: $PLAN_FILE"
 else

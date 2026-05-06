@@ -35,8 +35,9 @@ fi
 # Helper function for TTS
 speak() {
   local text="$1"
+  local tts_command="${YOLO_TTS_COMMAND:-tts-cli}"
   if [[ "$TTS_ENABLED" == "true" ]]; then
-     if command -v tts-cli &> /dev/null; then
+     if command -v "$tts_command" &> /dev/null; then
         # Run in background to not block too much, or blocking? User wanted blocking in original requirements.
         # But for a hook, blocking might delay the next prompt.
         # Let's keep it simple and blocking for now to ensure audio finishes.
@@ -44,7 +45,7 @@ speak() {
         if [[ ${#text} -gt 150 ]]; then
             text="${text:0:147}..."
         fi
-        tts-cli --text "$text" >/dev/null 2>&1 || true
+        "$tts_command" --text "$text" >/dev/null 2>&1 || true
      fi
   fi
 }
@@ -108,9 +109,11 @@ FEEDBACK_PROMPT="
 Goal: $GOAL
 
 Please check '$PLAN_FILE' for the next pending task (- [ ]).
-1. Execute the next task.
-2. Mark it as [x] in the plan when done.
-3. If you are stuck, update the plan with new findings.
+1. Execute the next task as an “experiment”: make one focused change, then verify it.
+2. Verification: use the Acceptance section in '$PLAN_FILE' (or infer the lightest correct checks for this repo).
+3. If verification regresses and you can’t quickly fix it, revert the change (prefer git restore/checkout when available) and try a different approach.
+4. Mark the task as [x] only after verification passes for that task’s scope.
+5. If you are stuck, update the plan with new findings and a smaller next step.
 "
 
 # Inject user feedback if present

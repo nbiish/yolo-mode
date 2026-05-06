@@ -7,6 +7,26 @@
 
 **YOLO Mode** implements the **Ralph Loop** pattern for autonomous agentic coding. It plans, executes, and verifies complex tasks with minimal human intervention while maintaining context hygiene through fresh context windows.
 
+<div align="center">
+  <hr width="50%">
+  <h3>Support This Project</h3>
+  <table style="border: none; border-collapse: collapse;">
+    <tr style="border: none;">
+      <td align="center" style="border: none; vertical-align: middle; padding: 20px;">
+        <h4>Stripe</h4>
+        <img src="qr-stripe-donation.png" alt="Scan to donate" width="180"/>
+        <p><a href="https://raw.githubusercontent.com/nbiish/license-for-all-works/8e9b73b269add9161dc04bbdd79f818c40fca14e/qr-stripe-donation.png">Donate via Stripe</a></p>
+      </td>
+      <td align="center" style="border: none; vertical-align: middle; padding: 20px;">
+        <a href="https://www.buymeacoffee.com/nbiish">
+          <img src="buy-me-a-coffee.svg" alt="Buy me a coffee" />
+        </a>
+      </td>
+    </tr>
+  </table>
+  <hr width="50%">
+</div>
+
 ## ✨ Features
 
 - **🤖 Autonomous Loop**: Takes a high-level prompt and runs until completion
@@ -22,12 +42,16 @@
 
 ### Option 1: Claude Code Plugin (Recommended)
 
-```bash
-# Add the marketplace
-claude plugin marketplace add https://github.com/nbiish/yolo-mode
+In Claude Code, add the marketplace and install the plugin:
 
-# Install the plugin
-claude plugin install yolo-mode@yolo-marketplace
+```
+/plugin marketplace add nbiish/yolo-mode
+/plugin install yolo-mode@yolo-marketplace
+```
+
+If you install/enable/disable plugins during a session, run:
+```
+/reload-plugins
 ```
 
 **Use in Claude Code:**
@@ -35,7 +59,19 @@ claude plugin install yolo-mode@yolo-marketplace
 /yolo "Refactor the authentication system"
 /yolo "Audit security" --agent opencode
 /yolo-tts "Build a React component library"  # With voice feedback
+/yolo-guide "Focus on small diffs, add tests, and keep changes minimal"
+/yolo-stop
 ```
+
+**Plugin Surface Area (what should appear in Claude Code):**
+- **Skills (2):** `yolo`, `yolo-tts`
+- **Slash Commands (5 visible + 1 hidden):**
+  - `/yolo <goal>` - Start YOLO loop
+  - `/yolo-tts <goal>` - Start YOLO loop with TTS
+  - `/yolo-mini <task>` - Run a single task via Mini-SWE-Agent
+  - `/yolo-guide <feedback>` - Queue guidance for the next iteration
+  - `/yolo-stop` - Stop the loop and clear state
+  - `/cancel-yolo` - Hidden; resets iteration counter to 0
 
 ### Option 2: Global CLI Tool
 
@@ -92,6 +128,13 @@ yolo-mode "Set up a CI/CD pipeline with GitHub Actions, Docker, and AWS deployme
   - **Mini-SWE-Agent** - `pip install mini-swe-agent` (NEW in v0.2.0)
 - **tts-cli** (optional) - For voice feedback
 
+## 🧠 Recommended Models (Cost/Quality)
+
+YOLO Mode assumes your preferred provider + default model are already configured for each CLI tool (Claude/Gemini/OpenCode/etc.). When you *can* select a model (via a CLI flag or provider config), prefer:
+
+- **DeepSeek V4 Pro (ZenMux)**: `deepseek/deepseek-v4-pro` (flagship, tuned for agentic coding). Source: https://zenmux.ai/provider/deepseek
+- **DeepSeek V4 Flash (OpenRouter)**: lower-cost DeepSeek V4 tier for high-throughput coding/agent workloads. Source: https://openrouter.ai/deepseek/deepseek-v4-flash
+
 ## ⚠️ Anti-Stall & Zero Interaction
 
 To achieve **true autonomous operation** without permission prompts for every tool use, you MUST start Claude Code with the following flag:
@@ -132,6 +175,9 @@ yolo-mode/
 ├── commands/            # Slash command definitions
 │   ├── yolo.md
 │   └── yolo-tts.md
+│   ├── yolo-mini.md
+│   ├── yolo-guide.md
+│   └── yolo-stop.md
 ├── yolo_mode/          # Python package
 │   └── scripts/
 │       └── yolo_loop.py
@@ -161,26 +207,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 MIT License - See [LICENSE](LICENSE) file.
 
-## 🙏 Support
-
-<div align="center">
-  <hr width="50%">
-  <table style="border: none; border-collapse: collapse;">
-    <tr style="border: none;">
-      <td align="center" style="border: none; vertical-align: middle; padding: 20px;">
-        <h4>Stripe</h4>
-        <img src="qr-stripe-donation.png" alt="Scan to donate" width="180"/>
-        <p><a href="https://raw.githubusercontent.com/nbiish/license-for-all-works/8e9b73b269add9161dc04bbdd79f818c40fca14e/qr-stripe-donation.png">Donate via Stripe</a></p>
-      </td>
-      <td align="center" style="border: none; vertical-align: middle; padding: 20px;">
-        <a href="https://www.buymeacoffee.com/nbiish">
-          <img src="buy-me-a-coffee.svg" alt="Buy me a coffee" />
-        </a>
-      </td>
-    </tr>
-  </table>
-  <hr width="50%">
-</div>
 
 ## Citation
 

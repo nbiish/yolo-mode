@@ -3,7 +3,7 @@
 ## Project Overview
 
 - **Name:** YOLO Mode (`yolo-mode`)
-- **Version:** 0.1.9
+- **Version:** 0.2.0
 - **Description:** An autonomous agent loop plugin for Claude Code that implements the "Ralph Loop" pattern.
 - **Purpose:** To transform Claude Code into a self-driving developer that can plan, execute, and verify complex tasks with minimal human intervention, utilizing fresh context windows for each task to maintain "context hygiene."
 - **UX:** 
@@ -29,7 +29,8 @@ The system follows a specific agentic pattern:
         - **Claude:** Uses `--dangerously-skip-permissions`
         - **OpenCode:** Uses env vars `OPENCODE_YOLO=true`
         - **Gemini/Qwen:** Uses `--yolo`
-    - **Self-Correction:** The agent updates `YOLO_PLAN.md` to mark the task as done (`[x]`) upon success.
+    - **Verification-Gated Completion:** The orchestrator runs verification commands from the `Acceptance` section and marks tasks as done (`[x]`) only after verification passes.
+    - **Rollback-on-Failure:** If verification fails and git state is clean, the orchestrator rolls back repo changes and retries with a tighter prompt.
 3.  **Completion & Feedback:**
     - When all tasks are done, the loop exits.
     - An interactive prompt asks the user for feedback or new tasks.
@@ -84,8 +85,15 @@ The system follows a specific agentic pattern:
 ### 9. Slash Commands
 - `/yolo <goal>` - Start YOLO Mode with the specified goal
 - `/yolo-tts <goal>` - Start YOLO Mode with TTS enabled
-- `/restart-yolo` - Restart the current YOLO session and reset iteration count
+- `/yolo-mini <task>` - Run a single task via Mini-SWE-Agent
+- `/yolo-guide <feedback>` - Steer the next autonomous iteration with new instructions
+- `/yolo-stop` - Stop the autonomous loop completely (clears state)
+- `/cancel-yolo` - Hidden; reset the iteration counter to 0
 - **Arguments:** Supports `--agent <name>` flag (e.g., `/yolo "Build app" --agent opencode`)
+
+### 10. Skills
+- `yolo` - Iterative plan/execute/verify loop (Ralph Loop pattern)
+- `yolo-tts` - Same as `yolo`, with TTS status output
 
 ## Plugin Structure
 
@@ -97,7 +105,9 @@ yolo-mode/
 ├── commands/
 │   ├── yolo.md              # /yolo slash command
 │   ├── yolo-tts.md          # /yolo-tts slash command
-│   └── restart-yolo.md      # /restart-yolo slash command
+│   ├── yolo-mini.md         # /yolo-mini slash command
+│   ├── yolo-guide.md        # /yolo-guide slash command
+│   └── yolo-stop.md         # /yolo-stop slash command
 ├── yolo_mode/
 │   ├── __init__.py
 │   ├── agents/              # Unified Agent Framework
@@ -122,7 +132,38 @@ yolo-mode/
 ## Installation Methods
 
 ### As Claude Code Plugin (Recommended)
-```bash
-claude plugin marketplace add nbiish/yolo-mode
-claude plugin install yolo-mode@yolo-marketplace
+Run these inside Claude Code:
 ```
+/plugin marketplace add nbiish/yolo-mode
+/plugin install yolo-mode@yolo-marketplace
+```
+
+Reference: Claude Code plugin marketplace + install workflow is documented in the official Claude Code docs:
+- https://code.claude.com/docs/en/discover-plugins
+- https://code.claude.com/docs/en/plugin-marketplaces
+
+## CLI Agent Roadmap (Non-Claude Runtimes)
+
+YOLO Mode supports multiple CLIs via `yolo_mode/agents/registry.py` and the unified runner. To add a new tool, define:
+- `cli_command` (+ optional `subcommand`)
+- non-interactive invocation (flags or env vars)
+- model selection flag (optional)
+- role/capability mapping (OSA)
+
+## Default Model Assumption
+
+Assume all supported CLIs already have provider auth + default model configured the way the user wants. YOLO Mode should not require interactive model selection mid-loop.
+
+## Preferred Models (Cost/Quality)
+
+When a CLI supports choosing a model (via `--model`, config file, or provider routing), prefer cost-effective agentic coding defaults:
+- **ZenMux**: `deepseek/deepseek-v4-pro` (DeepSeek V4 Pro). Source: https://zenmux.ai/provider/deepseek
+- **OpenRouter**: DeepSeek V4 Flash (fast/cheap tier) for high-throughput loops. Source: https://openrouter.ai/deepseek/deepseek-v4-flash
+
+**Targets**
+- **Kilo Code CLI**: supports one-off runs via `kilo run "..."` and install via `npm install -g @kilocode/cli`. Docs: https://kilo.ai/docs/cli
+- **Goose CLI (Block Goose)**: supports non-interactive/headless runs via `goose run -t "..."` (and `--no-session` for one-offs). Docs: https://block.github.io/goose/docs/tutorials/headless-goose/
+- **Pi (pi-coding-agent / pi-agent ecosystem)**: npm-based terminal coding agents with interactive + headless modes. Example: https://www.npmjs.com/package/@cargo-cult/pi-coding-agent
+
+**Notes**
+- Some tools (e.g. Goose/Kilo/Pi) are primarily TUI-first; prefer their documented “one-shot/headless” commands for deterministic YOLO loop execution.

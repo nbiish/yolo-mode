@@ -36,6 +36,8 @@
 - [ ] **Version Bump:** Update all version references to 0.2.0
 - [ ] **Final Verification:** Test mini-swe-agent integration with full YOLO loop.
 - [ ] **Official Release:** Push to GitHub and verify marketplace installation.
+- [ ] **Docs Finalization:** Align documented slash commands and plugin install steps with Claude Code plugin docs.
+- [ ] **CLI Expansion Plan:** Define integration patterns and configs for additional CLIs (kilo, goose, pi, etc.).
 
 ## Future Improvements
 

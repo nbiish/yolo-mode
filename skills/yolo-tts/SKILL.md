@@ -1,6 +1,6 @@
 ---
 name: yolo-tts
-description: Enables YOLO mode with Text-to-Speech feedback via tts-cli.
+description: Enables YOLO mode with Text-to-Speech feedback via tts-cli (or YOLO_TTS_COMMAND override).
 input:
   prompt:
     description: The task or goal for the autonomous loop.
@@ -17,7 +17,7 @@ yolo-mode "$prompt" --tts
 
 This tool will:
 1. Initialize a task list based on your prompt.
-2. Speak out status updates using `tts-cli`.
+2. Speak out status updates using `tts-cli` (override with `YOLO_TTS_COMMAND`).
 3. Spawn autonomous agents to complete the tasks.
 4. Loop until all tasks are verified and completed.
 5. Ask for feedback or new tasks upon completion (with spoken prompts).

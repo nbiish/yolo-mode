@@ -16,8 +16,19 @@
 
 - **Conciseness:** TTS messages must be short and to the point. Truncate long prompts (`text[:97] + "..."`).
 - **Pacing:** Always add a delay (`time.sleep`) after speaking to allow the user to process the audio.
-- **Clean Output:** Suppress stdout/stderr from `tts-cli` to keep the terminal logs clean for the user.
+- **Clean Output:** Suppress stdout/stderr from the TTS command to keep terminal logs clean for the user.
 - **Blocking Calls:** TTS uses blocking subprocess calls to prevent audio overlap.
+
+### TTS Engines
+
+- **Default (CLI):** `tts-cli` (invoked as `tts-cli --text "<msg>"`)
+- **Override:** set `YOLO_TTS_COMMAND` to a compatible binary name/path (must accept `--text`)
+- **Optional (Claude Code / MCP):** some hidden/internal commands can use `mcp__local-tts__speak`
+
+### Recommended TTS (2026)
+
+- **Kokoro-82M** (Apache-2.0, open-weight, strong quality for its size): https://huggingface.co/hexgrad/Kokoro-82M
+- **Piper** (fast local neural TTS, simple CLI with stdin + ONNX voices): https://github.com/bit-r/piper-TTS
 
 ## Plugin Development
 

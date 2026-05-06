@@ -146,6 +146,10 @@ Claude Code Plugin Architecture
 │  ┌──────────┐  ┌──────────────┐  ┌────────────┐ │
 │  │ /yolo    │  │ /yolo-tts    │  │ /yolo-mini │ │
 │  └────┬─────┘  └──────┬───────┘  └─────┬──────┘ │
+│       │                │                │        │
+│       │        ┌────────────┐  ┌────────────┐    │
+│       │        │ /yolo-guide│  │ /yolo-stop │    │
+│       │        └────────────┘  └────────────┘    │
 └───────┼────────────────┼────────────────┼────────┘
         │                │                │
         ▼                ▼                ▼
@@ -177,7 +181,9 @@ yolo-mode/
 ├── commands/                 # Slash command definitions
 │   ├── yolo.md              # Main YOLO mode command
 │   ├── yolo-tts.md          # YOLO mode with TTS feedback
-│   └── yolo-mini.md         # Mini-SWE-Agent execution
+│   ├── yolo-mini.md         # Mini-SWE-Agent execution
+│   ├── yolo-guide.md        # Inject guidance for next loop iteration
+│   └── yolo-stop.md         # Stop loop completely (clear state)
 ├── yolo_mode/               # Core Python package
 │   ├── agents/              # Agent framework
 │   │   ├── __init__.py
